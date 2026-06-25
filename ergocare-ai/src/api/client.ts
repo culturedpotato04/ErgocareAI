@@ -2,7 +2,7 @@
 // Drop this file into src/api/client.ts
 // Every call to the FastAPI backend goes through here.
 
-export const API_BASE = 'http://127.0.0.1:8000'
+export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 
 // ── Types returned by the backend ────────────────────────────────────────────
 
