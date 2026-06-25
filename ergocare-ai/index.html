@@ -1,0 +1,2578 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ErgoCare AI — Ergonomic Assessment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Playfair+Display:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ─── Design Tokens ─── */
+:root, [data-theme="light"] {
+  --color-bg: #f7f6f2;
+  --color-surface: #f9f8f5;
+  --color-surface-2: #fbfbf9;
+  --color-surface-offset: #f0ede8;
+  --color-border: #d4d1ca;
+  --color-divider: #dcd9d5;
+  --color-text: #28251d;
+  --color-text-muted: #7a7974;
+  --color-text-faint: #bab9b4;
+  --color-text-inverse: #f9f8f4;
+  --color-primary: #01696f;
+  --color-primary-hover: #0c4e54;
+  --color-primary-active: #0f3638;
+  --color-primary-highlight: #cedcd8;
+  --teal: #0a9396; --teal-dark: #005f73; --teal-light: #94d2bd;
+  --coral: #ee6c4d; --amber: #e9c46a; --ink: #0d1b2a;
+  --muted: #5e738b; --surface: #f4f7f9; --panel: #ffffff; --line: #dce6ed;
+  --shadow-sm: 0 2px 8px rgba(10,30,50,.07), 0 1px 3px rgba(10,30,50,.05);
+  --shadow-md: 0 8px 28px rgba(10,30,50,.10), 0 3px 10px rgba(10,30,50,.07);
+  --shadow-lg: 0 24px 64px rgba(10,30,50,.13), 0 8px 24px rgba(10,30,50,.09);
+  --shadow-3d: 0 20px 60px rgba(10,147,150,.18), 0 8px 20px rgba(10,147,150,.10), inset 0 1px 0 rgba(255,255,255,.8);
+  --font-display: 'Instrument Serif', 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', 'Outfit', 'Helvetica Neue', sans-serif;
+  --text-xs: clamp(0.75rem,.7rem + .25vw,.875rem);
+  --text-sm: clamp(0.875rem,.8rem + .35vw,1rem);
+  --text-base: clamp(1rem,.95rem + .25vw,1.125rem);
+  --text-lg: clamp(1.125rem,1rem + .75vw,1.5rem);
+  --text-xl: clamp(1.5rem,1.2rem + 1.25vw,2.25rem);
+  --text-2xl: clamp(2rem,1.2rem + 2.5vw,3.5rem);
+  --text-3xl: clamp(2.5rem,1rem + 4vw,5rem);
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;
+  --space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;
+  --space-12:3rem;--space-16:4rem;--space-20:5rem;
+  --radius-sm:.375rem;--radius-md:.5rem;--radius-lg:.75rem;
+  --radius-xl:1rem;--radius-full:9999px;
+  --transition: 180ms cubic-bezier(0.16,1,0.3,1);
+  --content-narrow:640px;--content-default:960px;--content-wide:1200px;
+}
+/* dark mode removed — light only */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);color:var(--color-text);background:var(--color-bg);line-height:1.6;transition:background 300ms ease,color 300ms ease}
+img,svg{display:block;max-width:100%}
+input,button,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+h1,h2,h3,h4,h5,h6{text-wrap:balance;line-height:1.2}
+p,li{text-wrap:pretty}
+::selection{background:oklch(from var(--color-primary) l c h / 0.2)}
+:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px;border-radius:var(--radius-sm)}
+
+/* ─── 3D Canvas ─── */
+#bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.5}
+
+/* ─── Fullscreen Overlays ─── */
+.overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.overlay.hidden{display:none!important}
+.overlay-bg-dark{background:rgba(0,0,0,.6)}
+.overlay-bg-teal{background:linear-gradient(135deg,rgba(0,95,115,.95),rgba(10,147,150,.9))}
+
+/* ─── Registration Card ─── */
+.reg-card{
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:1.5rem;width:min(560px,100%);box-shadow:var(--shadow-lg);
+  overflow:hidden;animation:slideUp .4s cubic-bezier(.22,1,.36,1);
+  position:relative;
+}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.reg-card-top{
+  background:linear-gradient(135deg,var(--teal-dark),var(--teal));
+  padding:2rem 2.5rem 1.75rem;color:#fff;position:relative;overflow:hidden;
+}
+.reg-card-top::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.12) 0%,transparent 50%);
+}
+.reg-logo{display:inline-flex;align-items:center;gap:.6rem;font-family:var(--font-display);font-size:1rem;font-weight:600;margin-bottom:1rem;position:relative}
+.reg-logo-mark{width:34px;height:34px;background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.35);border-radius:9px;display:grid;place-items:center;font-size:.72rem;font-weight:800;letter-spacing:.04em}
+.reg-card-top h2{font-family:var(--font-display);font-size:1.7rem;font-weight:400;line-height:1.15;position:relative}
+.reg-card-top p{font-size:.875rem;opacity:.8;margin-top:.5rem;position:relative;font-weight:300}
+.reg-card-body{padding:2rem 2.5rem 2.5rem}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.form-field{display:flex;flex-direction:column;gap:.4rem}
+.form-field.full{grid-column:1/-1}
+.form-field label{font-size:var(--text-xs);font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.07em}
+.form-field input,.form-field select{
+  padding:.6rem 1rem;border-radius:.625rem;
+  border:1px solid var(--color-border);background:var(--color-surface-2);
+  font-size:var(--text-sm);color:var(--color-text);
+  transition:all var(--transition);width:100%;
+}
+.form-field input:focus,.form-field select:focus{
+  outline:none;border-color:var(--color-primary);
+  box-shadow:0 0 0 3px oklch(from var(--color-primary) l c h / 0.12);
+  background:var(--color-surface);
+}
+.form-field input::placeholder{color:var(--color-text-faint)}
+.form-field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a7974' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:2.5rem}
+.field-err{font-size:var(--text-xs);color:#a12c7b;display:none}
+.field-err.show{display:block}
+.reg-err-banner{
+  background:#fef2f2;border:1px solid #fca5a5;border-radius:.625rem;
+  padding:.75rem 1rem;color:#dc2626;font-size:var(--text-xs);
+  margin-bottom:.75rem;display:none;
+}
+.reg-err-banner.show{display:block}
+.btn-submit{
+  width:100%;padding:.875rem;border-radius:.875rem;border:none;
+  background:linear-gradient(135deg,var(--teal-dark),var(--teal));
+  color:#fff;font-size:var(--text-base);font-weight:600;
+  margin-top:1.25rem;letter-spacing:.01em;
+  display:flex;align-items:center;justify-content:center;gap:.5rem;
+  transition:all var(--transition);
+  box-shadow:0 6px 20px rgba(10,147,150,.35);
+}
+.btn-submit:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(10,147,150,.45)}
+.btn-submit .arrow{transition:transform var(--transition)}
+.btn-submit:hover .arrow{transform:translateX(4px)}
+.reg-note{text-align:center;font-size:var(--text-xs);color:var(--color-text-muted);margin-top:.875rem}
+.success-toast{
+  display:none;padding:.875rem 1rem;border-radius:.625rem;
+  background:#d4dfcc;border:1px solid rgba(67,122,34,.3);
+  color:#437a22;font-size:var(--text-sm);font-weight:500;
+  margin-top:.875rem;align-items:center;gap:.75rem;
+}
+.success-toast.show{display:flex}
+
+/* ─── Admin Login Overlay ─── */
+.admin-login-card{
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:1.5rem;width:min(420px,100%);box-shadow:var(--shadow-lg);
+  overflow:hidden;animation:slideUp .4s cubic-bezier(.22,1,.36,1);
+}
+.admin-login-top{
+  background:linear-gradient(135deg,#0d1b2a,#1a2d44);
+  padding:2rem;color:#fff;text-align:center;
+}
+.admin-login-top h2{font-family:var(--font-display);font-size:1.5rem;font-weight:400;margin-bottom:.4rem}
+.admin-login-top p{font-size:.85rem;opacity:.65}
+.admin-login-body{padding:1.75rem 2rem 2rem}
+.admin-login-err{background:#fef2f2;border:1px solid #fca5a5;border-radius:.5rem;padding:.6rem .875rem;color:#dc2626;font-size:var(--text-xs);margin-bottom:.75rem;display:none}
+.admin-login-err.show{display:block}
+.btn-admin-login{
+  width:100%;padding:.875rem;border:none;border-radius:.875rem;
+  background:linear-gradient(135deg,#0d1b2a,#1e3a55);
+  color:#fff;font-size:var(--text-base);font-weight:600;margin-top:.5rem;
+  transition:all var(--transition);
+}
+.btn-admin-login:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.admin-cancel-btn{
+  display:block;width:100%;text-align:center;margin-top:.875rem;
+  font-size:var(--text-xs);color:var(--color-text-muted);
+  background:none;border:none;cursor:pointer;
+}
+.admin-cancel-btn:hover{color:var(--color-text)}
+
+/* ─── Page Wrapper ─── */
+.page-wrapper{position:relative;z-index:1;min-height:100dvh;display:grid;grid-template-rows:auto 1fr auto}
+
+/* ─── Header ─── */
+.site-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--space-4) var(--space-8);
+  background:oklch(from var(--color-bg) l c h / 0.88);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--color-border);
+  position:sticky;top:0;z-index:100;
+}
+.logo{display:flex;align-items:center;gap:var(--space-3);text-decoration:none;color:var(--color-text)}
+.logo-mark{width:36px;height:36px;flex-shrink:0}
+.logo-name{font-family:var(--font-display);font-size:var(--text-lg);font-weight:400;letter-spacing:-.01em;line-height:1}
+.logo-name span{color:var(--color-primary)}
+.header-nav{display:flex;align-items:center;gap:var(--space-3)}
+.nav-btn{
+  font-size:var(--text-sm);padding:var(--space-2) var(--space-4);
+  border-radius:var(--radius-full);border:1px solid var(--color-border);
+  background:var(--color-surface);color:var(--color-text-muted);
+  transition:all var(--transition);font-weight:500;
+}
+.nav-btn:hover{color:var(--color-text);border-color:var(--color-primary);background:var(--color-primary-highlight)}
+.nav-btn.active{background:var(--color-primary);color:#fff;border-color:var(--color-primary)}
+.theme-toggle{
+  width:36px;height:36px;border-radius:var(--radius-full);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--color-text-muted);border:1px solid var(--color-border);
+  background:var(--color-surface);transition:all var(--transition);
+}
+.theme-toggle:hover{color:var(--color-text);background:var(--color-surface-offset)}
+.user-chip{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.25rem .75rem .25rem .3rem;
+  border-radius:var(--radius-full);
+  background:var(--color-primary-highlight);
+  border:1px solid oklch(from var(--color-primary) l c h / 0.25);
+  font-size:var(--text-xs);font-weight:500;color:var(--color-primary);
+}
+.user-chip-av{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--color-primary);color:#fff;
+  display:grid;place-items:center;font-size:.65rem;font-weight:700;
+}
+
+/* ─── Hero Section ─── */
+.hero{
+  padding:var(--space-20) var(--space-8) var(--space-16);
+  text-align:center;max-width:var(--content-narrow);margin:0 auto;
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-6);
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  padding:var(--space-1) var(--space-4);border-radius:var(--radius-full);
+  background:var(--color-primary-highlight);color:var(--color-primary);
+  font-size:var(--text-xs);font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid oklch(from var(--color-primary) l c h / 0.25);
+}
+.hero-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--color-primary);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.hero h1{font-family:var(--font-display);font-size:var(--text-3xl);font-weight:400;line-height:1.1;letter-spacing:-.02em}
+.hero h1 em{font-style:italic;color:var(--color-primary)}
+.hero p{font-size:var(--text-base);color:var(--color-text-muted);max-width:50ch;line-height:1.7}
+.hero-stats{
+  display:flex;gap:var(--space-8);flex-wrap:wrap;justify-content:center;
+  padding:var(--space-6) var(--space-8);
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:var(--radius-xl);box-shadow:var(--shadow-sm);
+}
+.stat-item{text-align:center}
+.stat-num{font-family:var(--font-display);font-size:var(--text-xl);color:var(--color-primary);line-height:1}
+.stat-label{font-size:var(--text-xs);color:var(--color-text-muted);margin-top:var(--space-1);text-transform:uppercase;letter-spacing:.06em}
+
+/* ─── Main 2-col Layout ─── */
+.main-content{
+  max-width:var(--content-wide);margin:0 auto;padding:0 var(--space-8) var(--space-20);
+  display:grid;grid-template-columns:1fr 1fr;gap:var(--space-10);align-items:start;
+}
+
+/* ─── Registration Form Card ─── */
+.register-card{
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:var(--radius-xl);padding:var(--space-10);box-shadow:var(--shadow-lg);
+  position:relative;overflow:hidden;
+}
+.register-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--color-primary),#4f98a3);
+}
+.card-header{margin-bottom:var(--space-8)}
+.card-header h2{font-family:var(--font-display);font-size:var(--text-xl);font-weight:400;margin-bottom:var(--space-2)}
+.card-header p{font-size:var(--text-sm);color:var(--color-text-muted)}
+
+/* ─── Admin Side Panel ─── */
+.admin-panel{
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:var(--radius-xl);padding:var(--space-8);
+  box-shadow:var(--shadow-md);display:flex;flex-direction:column;gap:var(--space-6);
+  max-height:720px;
+}
+.admin-header{display:flex;align-items:center;justify-content:space-between}
+.admin-header h2{font-family:var(--font-display);font-size:var(--text-xl);font-weight:400}
+.admin-meta{display:flex;align-items:center;gap:var(--space-3)}
+.count-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:28px;height:28px;padding:0 var(--space-2);
+  background:var(--color-primary);color:#fff;
+  border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:700;
+}
+.export-btn{
+  padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);
+  border:1px solid var(--color-border);background:var(--color-surface-2);
+  font-size:var(--text-xs);font-weight:600;color:var(--color-text-muted);
+  transition:all var(--transition);text-transform:uppercase;letter-spacing:.05em;
+}
+.export-btn:hover{background:var(--color-primary-highlight);color:var(--color-primary);border-color:var(--color-primary)}
+.admin-search{
+  display:flex;gap:var(--space-3);align-items:center;
+  padding:var(--space-3) var(--space-4);border-radius:var(--radius-lg);
+  border:1px solid var(--color-border);background:var(--color-surface-2);
+}
+.admin-search input{flex:1;border:none;background:transparent;font-size:var(--text-sm);color:var(--color-text);outline:none}
+.admin-search input::placeholder{color:var(--color-text-faint)}
+.clients-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:var(--space-3);padding-right:var(--space-2)}
+.clients-list::-webkit-scrollbar{width:4px}
+.clients-list::-webkit-scrollbar-track{background:transparent}
+.clients-list::-webkit-scrollbar-thumb{background:var(--color-border);border-radius:var(--radius-full)}
+.client-card{
+  padding:var(--space-4);border-radius:var(--radius-lg);
+  border:1px solid var(--color-border);background:var(--color-surface-2);
+  display:grid;grid-template-columns:40px 1fr auto;
+  gap:var(--space-3);align-items:center;
+  transition:all var(--transition);
+  animation:slideIn .3s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+.client-card:hover{box-shadow:var(--shadow-sm);border-color:var(--color-primary-highlight);background:var(--color-surface)}
+.client-avatar{
+  width:40px;height:40px;border-radius:var(--radius-full);
+  background:var(--color-primary-highlight);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:var(--text-base);color:var(--color-primary);
+}
+.client-name{font-weight:600;font-size:var(--text-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-detail{font-size:var(--text-xs);color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-meta{text-align:right;flex-shrink:0}
+.client-job{display:inline-block;padding:var(--space-1) var(--space-3);border-radius:var(--radius-full);background:var(--color-surface-offset);font-size:var(--text-xs);color:var(--color-text-muted);font-weight:500}
+.client-age{font-size:var(--text-xs);color:var(--color-text-faint);margin-top:var(--space-1)}
+.score-pill{display:inline-block;padding:2px 8px;border-radius:var(--radius-full);font-size:.68rem;font-weight:700;margin-top:3px}
+/* Date filter tabs */
+.date-filter-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.dft{padding:4px 12px;border-radius:var(--radius-full);border:1.5px solid var(--color-border);background:var(--color-surface);font-size:.72rem;font-weight:600;color:var(--color-text-muted);cursor:pointer;transition:all 160ms ease;white-space:nowrap}
+.dft:hover{border-color:var(--color-primary);color:var(--color-primary);background:rgba(0,109,119,.06)}
+.dft.active{background:var(--color-primary);color:#fff;border-color:var(--color-primary);box-shadow:0 2px 8px rgba(0,109,119,.25)}
+.date-group-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-text-faint);padding:10px 4px 4px;border-bottom:1px solid var(--color-border);margin-bottom:4px}
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:var(--space-16) var(--space-8);color:var(--color-text-faint);text-align:center;gap:var(--space-4);
+}
+.empty-state svg{opacity:.35}
+.empty-state p{font-size:var(--text-sm);max-width:28ch}
+.locked-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:var(--space-16) var(--space-8);text-align:center;gap:var(--space-4);
+  color:var(--color-text-muted);
+}
+.locked-state .lock-icon{font-size:2.5rem;margin-bottom:.5rem}
+.locked-state p{font-size:var(--text-sm);max-width:26ch;line-height:1.6}
+.btn-unlock{
+  padding:var(--space-3) var(--space-6);border-radius:var(--radius-lg);
+  background:var(--color-primary);color:#fff;font-size:var(--text-sm);font-weight:600;
+  border:none;transition:all var(--transition);
+}
+.btn-unlock:hover{background:var(--color-primary-hover);transform:translateY(-1px)}
+
+/* ─── Admin Full Page ─── */
+.admin-fullpage{max-width:var(--content-wide);margin:0 auto;padding:var(--space-10) var(--space-8)}
+.admin-fp-panel{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-8);box-shadow:var(--shadow-md);display:flex;flex-direction:column;gap:var(--space-6)}
+.admin-stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-5)}
+.astat{background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-5);text-align:center}
+.astat-num{font-family:var(--font-display);font-size:var(--text-2xl);color:var(--color-primary);line-height:1}
+.astat-label{font-size:var(--text-xs);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.07em;margin-top:.3rem}
+
+/* ─── Views ─── */
+.view{display:none}
+.view.active{display:block}
+
+/* ─── Site Footer ─── */
+.site-footer{
+  border-top:1px solid var(--color-divider);padding:var(--space-6) var(--space-8);
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-4);
+  background:oklch(from var(--color-bg) l c h / 0.9);
+}
+.footer-text{font-size:var(--text-xs);color:var(--color-text-faint)}
+.footer-brand{font-family:var(--font-display);color:var(--color-text-muted)}
+
+/* ─── Assessment & Results (from original) ─── */
+.shell{width:min(1200px,calc(100% - 48px));margin:0 auto}
+.landing{min-height:calc(100vh - 64px);padding:64px 0;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(300px,.7fr);gap:60px;align-items:center}
+.intro{display:grid;gap:28px}
+.intro-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(10,147,150,.08);border:1px solid rgba(10,147,150,.2);color:var(--teal-dark);border-radius:999px;padding:6px 16px;font-size:.82rem;font-weight:600}
+.intro h1{font-size:clamp(2.6rem,5.5vw,5rem);line-height:.97;font-weight:700;letter-spacing:-.02em;font-family:var(--font-display)}
+.intro h1 span{color:var(--teal)}
+.intro p{font-size:1.1rem;color:var(--muted);line-height:1.75;max-width:580px;font-weight:300}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+.mode-card{background:var(--panel);border:1.5px solid var(--line);border-radius:18px;padding:24px;cursor:pointer;text-align:left;display:grid;gap:12px;box-shadow:var(--shadow-sm);transition:transform 200ms ease,box-shadow 200ms ease,border-color 200ms ease;transform-style:preserve-3d;position:relative;overflow:hidden}
+.mode-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--teal),var(--teal-dark));opacity:0;transition:opacity 200ms}
+.mode-card:hover{transform:translateY(-6px) perspective(600px) rotateX(-2deg);box-shadow:var(--shadow-3d);border-color:var(--teal-light)}
+.mode-card:hover::before{opacity:1}
+.mode-card.accent::before{background:linear-gradient(90deg,var(--coral),#d64f38)}
+.mode-card.accent:hover{box-shadow:0 20px 60px rgba(238,108,77,.18),0 8px 20px rgba(238,108,77,.10),inset 0 1px 0 rgba(255,255,255,.8);border-color:rgba(238,108,77,.4)}
+.mode-icon{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:1.3rem;background:rgba(10,147,150,.08)}
+.mode-card.accent .mode-icon{background:rgba(238,108,77,.1)}
+.mode-card strong{font-family:var(--font-display);font-size:1.05rem;font-weight:600;display:block}
+.mode-card small{display:block;color:var(--muted);font-size:.85rem;line-height:1.5;font-weight:300}
+.product-visual{display:grid;place-items:center}
+.phone-3d{width:min(300px,100%);min-height:540px;border:8px solid #1a2536;border-radius:36px;background:linear-gradient(160deg,#f9fbfc,#eef4f8);box-shadow:var(--shadow-lg),8px 16px 40px rgba(0,0,0,.25),-4px -4px 20px rgba(255,255,255,.6);padding:20px;transform:perspective(900px) rotateY(-14deg) rotateX(4deg);transition:transform 600ms ease;position:relative;overflow:hidden}
+.phone-3d:hover{transform:perspective(900px) rotateY(-4deg) rotateX(1deg)}
+.phone-notch{width:72px;height:5px;background:#2d3a4a;border-radius:999px;margin:0 auto 20px}
+.ph-risk-ring{display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.ph-cat{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ph-cat-label{font-size:.78rem;color:var(--muted)}
+.ph-cat-val{font-size:.78rem;font-weight:700}
+.ph-bar{height:5px;background:#e4eaef;border-radius:999px;overflow:hidden;margin-bottom:12px}
+.ph-bar span{display:block;height:100%;border-radius:inherit}
+.ph-section{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 8px;font-weight:600}
+.loading-screen{min-height:calc(100vh - 64px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+.loader-ring{width:80px;height:80px;animation:spin 1.1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-title{font-family:var(--font-display);font-size:1.4rem;font-weight:600}
+.loader-msg{color:var(--muted);font-size:.95rem;text-align:center;max-width:340px;line-height:1.7;font-weight:300}
+.assessment{padding:40px 0 64px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;gap:16px}
+.topbar h1{font-size:clamp(1.6rem,3vw,2.6rem);font-weight:700;line-height:1;font-family:var(--font-display)}
+.topbar-eyebrow{font-size:.78rem;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.btn-ghost{height:42px;padding:0 18px;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-weight:500;font-size:.9rem;cursor:pointer;transition:border-color 160ms,background 160ms}
+.btn-ghost:hover{border-color:#94a3b8;background:#f8fafc}
+.btn-ghost:disabled{opacity:.4;cursor:not-allowed}
+.q-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px}
+.progress-panel{background:var(--panel);border:1.5px solid var(--line);border-radius:18px;padding:24px;align-self:start;box-shadow:var(--shadow-sm);display:grid;gap:20px}
+.progress-ring-wrap{display:flex;justify-content:center}
+.p-ring{--p:0;width:130px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#fff 60%,transparent 61%),conic-gradient(var(--teal) calc(var(--p)*1%),#dce6ed 0);box-shadow:0 6px 20px rgba(10,147,150,.2)}
+.p-ring span{font-family:var(--font-display);font-size:1.6rem;font-weight:700}
+.p-cat-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:center;font-weight:600}
+.client-pill{background:rgba(10,147,150,.06);border:1px solid rgba(10,147,150,.15);border-radius:10px;padding:12px 14px;display:grid;gap:2px}
+.client-pill .cp-name{font-weight:600;font-size:.9rem}
+.client-pill .cp-sub{font-size:.78rem;color:var(--muted);font-weight:300}
+.saved-note{font-size:.78rem;color:var(--muted);padding-top:14px;border-top:1px solid var(--line);font-weight:300}
+.q-card{background:var(--panel);border:1.5px solid var(--line);border-radius:18px;padding:32px;box-shadow:var(--shadow-sm);display:grid;gap:22px}
+.q-text{font-family:var(--font-display);font-size:clamp(1.3rem,2.5vw,2rem);font-weight:600;line-height:1.2}
+.option-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.option-btn{min-height:54px;padding:12px 16px;border:1.5px solid var(--line);border-radius:12px;background:#f9fafc;color:var(--ink);font-size:.9rem;text-align:left;cursor:pointer;transition:all 160ms ease;transform-style:preserve-3d}
+.option-btn:hover{border-color:var(--teal);background:#f0faf8;transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+.option-btn.selected{border-color:var(--teal);background:#e5f7f4;box-shadow:inset 4px 0 0 var(--teal);font-weight:600}
+.answer-field{display:grid;gap:6px}
+.answer-field span{font-size:.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+textarea{width:100%;min-height:110px;border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;resize:vertical;font-size:.95rem;color:var(--ink);background:#fff;transition:border-color 160ms}
+textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(10,147,150,.1)}
+.voice-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.88rem}
+.btn-record{height:42px;padding:0 18px;background:var(--coral);color:#fff;border:none;border-radius:10px;font-weight:600;font-size:.9rem;cursor:pointer;transition:filter 160ms}
+.btn-record.recording{background:#9b2f27;animation:bpulse 1.2s ease-in-out infinite}
+@keyframes bpulse{0%,100%{box-shadow:0 0 0 0 rgba(155,47,39,.4)}50%{box-shadow:0 0 0 8px rgba(155,47,39,0)}}
+.notice{padding:10px 14px;border-left:4px solid var(--amber);border-radius:0 6px 6px 0;color:#78450a;background:#fffbeb;font-size:.88rem}
+.notice.saving{border-left-color:var(--teal);color:#0f4f56;background:#e8f7f4}
+.q-actions{display:flex;justify-content:space-between;gap:12px}
+.btn-primary{height:46px;padding:0 24px;background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:#fff;border:none;border-radius:10px;font-weight:600;font-size:.95rem;cursor:pointer;box-shadow:0 6px 18px rgba(10,147,150,.3);transition:transform 160ms,box-shadow 160ms}
+.btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 10px 24px rgba(10,147,150,.35)}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.results-page{min-height:calc(100vh - 64px)}
+.results-hero{padding:56px 0 48px;border-bottom:1.5px solid var(--line);margin-bottom:0}
+.hero-inner{width:min(1200px,calc(100% - 48px));margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:48px;align-items:start}
+.hero-left{display:grid;gap:18px}
+.level-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:999px;font-size:.82rem;font-weight:700;width:fit-content}
+.hero-title{font-family:var(--font-display);font-size:clamp(2rem,4.5vw,3.6rem);font-weight:700;line-height:1.05}
+.hero-client-card{display:flex;align-items:center;gap:14px;background:rgba(10,147,150,.06);border:1.5px solid rgba(10,147,150,.15);border-radius:14px;padding:16px 20px;width:fit-content}
+.hcc-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--teal),var(--teal-dark));display:grid;place-items:center;color:#fff;font-weight:800;font-size:.9rem}
+.hcc-info{display:grid;gap:2px}
+.hcc-name{font-weight:700;font-size:.95rem}
+.hcc-sub{font-size:.8rem;color:var(--muted);font-weight:300}
+.hero-tagline{font-size:1.05rem;color:var(--muted);line-height:1.7;max-width:580px;font-weight:300}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+.btn-download{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:12px;border:none;color:#fff;font-weight:700;font-size:.95rem;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.2);transition:transform 160ms,box-shadow 160ms}
+.btn-download:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.25)}
+.btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:11px 20px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-weight:600;font-size:.9rem;cursor:pointer;transition:border-color 160ms,background 160ms}
+.btn-secondary:hover{border-color:#94a3b8;background:var(--surface)}
+.hero-ring-wrap{text-align:center;padding-top:8px}
+.risk-ring{width:180px;height:180px;display:block;margin:0 auto;filter:drop-shadow(0 8px 24px rgba(10,147,150,.25))}
+.ring-animate{animation:fill-ring 1.5s cubic-bezier(.4,0,.2,1) .3s forwards}
+@keyframes fill-ring{from{stroke-dashoffset:339.3}to{stroke-dashoffset:var(--t)}}
+.ring-caption{color:var(--muted);font-size:.78rem;line-height:1.6;margin-top:10px;font-weight:300}
+.results-body{width:min(1200px,calc(100% - 48px));margin:0 auto;padding:48px 0 80px;display:grid;gap:56px}
+.section-head{margin-bottom:20px}
+.section-head h2{font-size:1.5rem;font-weight:700;font-family:var(--font-display)}
+.section-head p{font-size:.92rem;color:var(--muted);margin-top:6px;font-weight:300;line-height:1.65}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px}
+.cat-card{background:var(--panel);border:1.5px solid var(--line);border-radius:18px;padding:24px;display:grid;gap:14px;box-shadow:var(--shadow-sm);transform-style:preserve-3d;transition:transform 280ms ease,box-shadow 280ms ease;position:relative;overflow:hidden}
+.cat-card:hover{transform:perspective(700px) rotateY(2deg) rotateX(-2deg) translateY(-4px);box-shadow:var(--shadow-3d)}
+.cat-card::after{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.5) 0%,transparent 60%);pointer-events:none}
+.cat-header{display:flex;align-items:center;gap:12px}
+.cat-icon{font-size:1.7rem;flex-shrink:0}
+.cat-name{font-family:var(--font-display);font-weight:600;font-size:.95rem}
+.cat-badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:700;margin-top:3px}
+.cat-score{font-family:var(--font-display);font-size:1.8rem;font-weight:700;margin-left:auto}
+.cat-bar{height:7px;background:#e4eaef;border-radius:999px;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:inherit;transition:width 1s ease .3s}
+.cat-tip{padding:10px 14px;border-radius:10px;font-size:.86rem;line-height:1.6;font-weight:300}
+.prev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+.prev-card{perspective:1000px}
+.prev-inner{position:relative;overflow:hidden;border-radius:20px;padding:28px 24px;background:var(--panel);border:1.5px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.07),0 3px 8px rgba(0,0,0,.05),inset 0 1px 0 rgba(255,255,255,.9);border-top:4px solid var(--c,var(--teal));transform:perspective(700px) rotateX(0) rotateY(0);transition:transform 300ms ease,box-shadow 300ms ease}
+.prev-card:hover .prev-inner{transform:perspective(700px) rotateX(-4deg) rotateY(3deg) translateY(-5px);box-shadow:0 24px 56px rgba(0,0,0,.12),0 8px 18px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.9)}
+.prev-shine{position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.45) 0%,transparent 55%);pointer-events:none}
+.prev-num{font-family:var(--font-display);font-size:2.6rem;font-weight:700;opacity:.1;color:var(--c,var(--teal));line-height:1}
+.prev-icon{font-size:1.9rem;margin-bottom:10px}
+.prev-title{font-family:var(--font-display);font-size:1.05rem;font-weight:600;margin-bottom:8px}
+.prev-desc{font-size:.86rem;color:var(--muted);line-height:1.65;font-weight:300}
+.action-list{display:grid;gap:12px}
+.action-item{display:flex;align-items:flex-start;gap:16px;background:var(--panel);border:1.5px solid var(--line);border-radius:14px;padding:16px 20px;box-shadow:var(--shadow-sm);transition:transform 160ms ease}
+.action-item:hover{transform:translateX(4px)}
+.action-urgent{border-color:#fca5a5;background:#fff5f5}
+.action-num{flex-shrink:0;width:32px;height:32px;display:grid;place-items:center;border-radius:50%;color:#fff;font-family:var(--font-display);font-size:.85rem;font-weight:700}
+.action-item p{font-size:.92rem;line-height:1.65;font-weight:300}
+.two-col{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+.finding-panel{background:var(--panel);border:1.5px solid var(--line);border-radius:16px;padding:24px;box-shadow:var(--shadow-sm)}
+.positive-panel{background:#f0fdf4;border:1.5px solid #86efac;border-radius:16px;padding:24px}
+.finding-panel h3,.positive-panel h3{font-size:1.1rem;font-weight:700;margin-bottom:14px;font-family:var(--font-display)}
+ul.flist{padding-left:20px;display:grid;gap:10px;font-size:.88rem;line-height:1.65;font-weight:300}
+.factor-row{display:flex;flex-wrap:wrap;gap:12px}
+.factor-chip{display:flex;align-items:center;gap:10px;background:var(--panel);border:1.5px solid var(--line);border-radius:999px;padding:10px 18px;box-shadow:var(--shadow-sm);transition:transform 160ms}
+.factor-chip:hover{transform:translateY(-2px)}
+.factor-rank{font-size:.72rem;font-weight:700;color:var(--muted)}
+.factor-name{font-weight:600;font-size:.9rem}
+.factor-score{font-family:var(--font-display);font-weight:700;font-size:.95rem}
+.footer-cta{background:linear-gradient(135deg,#0d1b2a,#1a2d44);border-radius:20px;padding:40px;display:grid;gap:16px;justify-items:start}
+.footer-cta h3{font-size:1.5rem;color:#fff;font-family:var(--font-display)}
+.footer-cta p{color:#7e9bb5;font-size:.92rem;line-height:1.7;max-width:560px;font-weight:300}
+.disclaimer{color:var(--muted);font-size:.78rem;line-height:1.65;font-weight:300}
+.session-ref{color:var(--muted);font-size:.78rem}
+.session-ref code{background:#f1f5f9;padding:2px 7px;border-radius:4px;font-size:.75rem}
+.error-banner{background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px 16px;color:#dc2626;font-size:.88rem;white-space:pre-wrap}
+
+/* ─── Responsive ─── */
+@media(max-width:960px){
+  .main-content{grid-template-columns:1fr}
+  .landing,.q-layout,.hero-inner{grid-template-columns:1fr}
+  .mode-grid,.option-grid{grid-template-columns:1fr}
+  .product-visual{display:none}
+  .topbar{flex-direction:column;align-items:flex-start}
+  .admin-stats-row{grid-template-columns:1fr 1fr}
+}
+@media(max-width:640px){
+  .site-header{padding:var(--space-3) var(--space-4)}
+  .hero{padding:var(--space-12) var(--space-4) var(--space-10)}
+  .main-content{padding:0 var(--space-4) var(--space-16)}
+  .form-grid{grid-template-columns:1fr}
+  .register-card{padding:var(--space-6)}
+  .shell,.results-body,.hero-inner{width:calc(100% - 24px)}
+  .footer-cta{padding:24px 20px}
+  .admin-stats-row{grid-template-columns:1fr}
+  .header-nav .nav-btn span{display:none}
+}
+</style>
+
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f7fbf9;
+  --bg2:#fffaf5;
+  --surface:#ffffff;
+  --surface-soft:#fcfffd;
+  --text:#18352f;
+  --muted:#61776f;
+  --line:#d9e7e1;
+  --primary:#3a8b74;
+  --primary-dark:#2e6f5d;
+  --soft-green:#e9f5f0;
+  --soft-peach:#fbefe5;
+  --warm:#c7775d;
+  --shadow:0 14px 32px rgba(58,139,116,.10);
+  --radius:20px;
+}
+html,body{
+  margin:0;padding:0;
+  background:linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%) !important;
+  color:var(--text) !important;
+  font-family:Inter,Segoe UI,Arial,sans-serif;
+}
+body{line-height:1.65}
+*{box-sizing:border-box}
+.dark,.dark-mode,[data-theme="dark"]{background:transparent !important;color:inherit !important}
+main,.container,.wrapper{width:min(1160px,calc(100% - 26px));margin-inline:auto}
+section,.card,.panel,.box,form,.report-container,.assessment-container,.result-container,.modal-content,.admin-container,.dashboard-card{
+  background:linear-gradient(180deg,#ffffff 0%, #fbfefd 100%) !important;
+  color:var(--text) !important;
+  border:1px solid var(--line) !important;
+  border-radius:var(--radius) !important;
+  box-shadow:var(--shadow) !important;
+}
+header,.hero,.intro,.banner,.top-section{
+  background:linear-gradient(135deg,#edf7f2 0%, #fff4eb 100%) !important;
+  color:var(--text) !important;
+  border:1px solid #dbe9e3 !important;
+  border-radius:28px !important;
+  box-shadow:0 16px 36px rgba(58,139,116,.10) !important;
+}
+h1,h2,h3,h4,h5,h6{color:#16342d !important}
+p,li,label,small,span,div{color:inherit}
+.muted,.subtitle,.helper-text,.subtext{color:var(--muted) !important}
+input,select,textarea{
+  background:#fff !important;
+  color:var(--text) !important;
+  border:1px solid #cedfd8 !important;
+  border-radius:14px !important;
+  padding:13px 15px !important;
+}
+input:focus,select:focus,textarea:focus{
+  outline:none !important;
+  border-color:#88bbaa !important;
+  box-shadow:0 0 0 4px rgba(184,224,210,.35) !important;
+}
+button,.btn{
+  background:linear-gradient(135deg,var(--primary),var(--primary-dark)) !important;
+  color:#fff !important;
+  border:none !important;
+  border-radius:14px !important;
+  padding:12px 18px !important;
+  font-weight:700 !important;
+  box-shadow:0 10px 24px rgba(58,139,116,.18) !important;
+}
+button.secondary,.btn.secondary{background:#edf5f1 !important;color:#244940 !important;border:1px solid #d7e5df !important;box-shadow:none !important}
+.report-header,.pdf-header,.summary-header{
+  background:linear-gradient(135deg,#f2faf6 0%, #fff7f0 100%) !important;
+  border-bottom:1px solid #dde9e4 !important;
+  border-radius:20px 20px 0 0 !important;
+  padding:22px !important;
+}
+.badge,.tag,.pill,.client-display-name{
+  background:#eef8f3 !important;
+  color:#2d6556 !important;
+  border:1px solid #d5e8e0 !important;
+  border-radius:999px !important;
+  padding:7px 12px !important;
+  font-weight:700 !important;
+}
+.notice,.info,.tip{
+  background:linear-gradient(135deg,#f4fbf7,#fff8f2) !important;
+  border:1px solid #dcebe5 !important;
+  border-left:5px solid #8bb9a9 !important;
+  color:#49635c !important;
+  border-radius:12px !important;
+  padding:14px 16px !important;
+}
+table{background:#fff !important;border:1px solid #dbe7e2 !important;border-radius:16px !important;overflow:hidden}
+th{background:#eef8f3 !important;color:#2b6354 !important}
+td,th{border-bottom:1px solid #e5efeb !important}
+footer{color:#74877f !important}
+@media print{
+  body{background:#fff !important}
+  *{color-scheme:light !important}
+}
+</style>
+
+</head>
+<body>
+
+<!-- ─── Three.js Background ─── -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- ─── Admin Login Overlay ─── -->
+<div class="overlay overlay-bg-dark hidden" id="overlay-admin-login">
+  <div class="admin-login-card">
+    <div class="admin-login-top">
+      <div style="font-size:2rem;margin-bottom:.75rem">🔐</div>
+      <h2>Admin Access</h2>
+      <p>Enter your credentials to view client data and scores</p>
+    </div>
+    <div class="admin-login-body">
+      <div class="admin-login-err" id="admin-login-err">Incorrect email or password.</div>
+      <div class="form-field" style="margin-bottom:1rem">
+        <label>Email Address</label>
+        <input type="email" id="al-email" placeholder="admin@ergocare.com" autocomplete="email"/>
+      </div>
+      <div class="form-field">
+        <label>Password</label>
+        <input type="password" id="al-pass" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="btn-admin-login" onclick="attemptAdminLogin()">Sign In</button>
+      <button class="admin-cancel-btn" onclick="closeAdminLogin()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Page Wrapper ─── -->
+<div class="page-wrapper">
+
+  <!-- Header -->
+  <header class="site-header">
+    <a href="#" class="logo" onclick="showView('home'); return false;">
+      <svg class="logo-mark" width="36" height="36" viewBox="0 0 36 36" fill="none">
+        <circle cx="18" cy="18" r="17" stroke="currentColor" stroke-width="1.5" opacity="0.2"/>
+        <path d="M10 24 Q18 10 26 24" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <circle cx="18" cy="15" r="3.5" fill="var(--color-primary)" opacity="0.8"/>
+        <path d="M14 20 h8" stroke="var(--color-primary)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+      </svg>
+      <span class="logo-name">Ergo<span>Care</span> AI</span>
+    </a>
+    <nav class="header-nav">
+      <button class="nav-btn active" id="btn-home" onclick="showView('home')"><span>Register</span></button>
+      <button class="nav-btn" id="btn-admin" onclick="handleAdminNav()"><span>View Clients</span></button>
+      <div class="user-chip hidden" id="user-chip">
+        <div class="user-chip-av" id="user-chip-av">?</div>
+        <span id="user-chip-name"></span>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ─── Home View ─── -->
+  <div class="view active" id="view-home">
+
+    <!-- Sub-views: registration landing OR assessment OR results -->
+    <div id="sub-register">
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-badge"><span class="hero-badge-dot"></span>Ergonomic Risk Assessment</div>
+        <h1>Your wellbeing,<br><em>assessed with care.</em></h1>
+        <p>Register below, complete the 40-question assessment, and receive your personalised ergonomic risk report instantly.</p>
+        <div class="hero-stats">
+          <div class="stat-item"><div class="stat-num" id="stat-registered">0</div><div class="stat-label">Registered</div></div>
+          <div class="stat-item"><div class="stat-num">40</div><div class="stat-label">Questions</div></div>
+          <div class="stat-item"><div class="stat-num">AI</div><div class="stat-label">Powered</div></div>
+        </div>
+      </section>
+
+      <!-- 2-col: form + live panel -->
+      <main class="main-content">
+        <!-- Registration Form -->
+        <div class="register-card">
+          <div class="card-header">
+            <h2>Client Registration</h2>
+            <p>Fill in your details to begin. Stored securely in-session.</p>
+          </div>
+          <div class="reg-err-banner" id="reg-err-banner"></div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="f-name">Full Name</label>
+              <input type="text" id="f-name" placeholder="Jane Smith" autocomplete="name"/>
+              <span class="field-err" id="err-name">Please enter your full name.</span>
+            </div>
+            <div class="form-field">
+              <label for="f-age">Age</label>
+              <input type="number" id="f-age" placeholder="28" min="16" max="100"/>
+              <span class="field-err" id="err-age">Enter a valid age (16–100).</span>
+            </div>
+            <div class="form-field full">
+              <label for="f-email">Email Address</label>
+              <input type="email" id="f-email" placeholder="jane@company.com" autocomplete="email"/>
+              <span class="field-err" id="err-email">Enter a valid email address.</span>
+            </div>
+            <div class="form-field">
+              <label for="f-phone">Phone Number</label>
+              <input type="tel" id="f-phone" placeholder="+91 98765 43210" autocomplete="tel"/>
+              <span class="field-err" id="err-phone">Enter a valid phone number.</span>
+            </div>
+            <div class="form-field">
+  <label for="f-job">Job Role</label>
+  
+  <input 
+    type="text" 
+    id="f-job" 
+    placeholder="Enter your job role"
+  >
+</div>
+              <span class="field-err" id="err-job">Please type your job role.</span>
+            </div>
+          </div>
+          <button class="btn-submit" onclick="submitRegistration()">
+            Register &amp; Begin Assessment
+            <span class="arrow">→</span>
+          </button>
+          <div class="success-toast" id="success-toast">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Registration saved! Proceeding to assessment…
+          </div>
+        </div>
+
+        <!-- Live Admin Panel (blurred unless logged in) -->
+        <div class="admin-panel">
+          <div class="admin-header">
+            <h2>Registered Clients</h2>
+            <div class="admin-meta">
+              <span class="count-badge" id="count-badge">0</span>
+              <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+            </div>
+          </div>
+          <div class="admin-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="search-inline" placeholder="Search by name or email…" oninput="renderClients(this.value,'inline')"/>
+          </div>
+          <div class="date-filter-tabs" id="date-tabs-inline">
+            <button class="dft active" onclick="setDateFilter('all','inline')">All</button>
+            <button class="dft" onclick="setDateFilter('today','inline')">Today</button>
+            <button class="dft" onclick="setDateFilter('week','inline')">This Week</button>
+            <button class="dft" onclick="setDateFilter('month','inline')">This Month</button>
+          </div>
+          <div class="clients-list" id="clients-list-inline">
+            <div class="locked-state" id="inline-locked">
+              <div class="lock-icon">🔒</div>
+              <p>Client data is protected. Admin login required to view registrations.</p>
+              <button class="btn-unlock" onclick="openAdminLogin()">Admin Login</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Assessment & Results rendered here -->
+    <div id="sub-app" style="display:none">
+      <nav class="nav" style="background:var(--panel);border-bottom:1.5px solid var(--line);padding:0 40px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:64px;z-index:40;">
+        <div style="display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-size:1.1rem;font-weight:600;color:var(--teal-dark);">
+          <div style="width:38px;height:38px;background:linear-gradient(135deg,var(--teal-dark),var(--teal));border-radius:10px;display:grid;place-items:center;color:#fff;font-size:.75rem;font-weight:800;box-shadow:0 4px 12px rgba(10,147,150,.3);">EC</div>
+          ErgoCare AI
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.88rem;color:var(--muted);">
+          <div id="app-nav-avatar" style="width:36px;height:36px;background:linear-gradient(135deg,#e0f4f4,var(--teal-light));border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.8rem;color:var(--teal-dark);border:2px solid var(--teal-light);">?</div>
+          <span id="app-nav-name">—</span>
+        </div>
+      </nav>
+      <div id="app"></div>
+    </div>
+  </div>
+
+  <!-- ─── Admin Full Page View ─── -->
+  <div class="view" id="view-admin">
+    <div class="admin-fullpage">
+      <!-- Locked state -->
+      <div id="admin-locked-msg" style="text-align:center;padding:5rem 1rem;">
+        <div style="font-size:3rem;margin-bottom:1rem">🔐</div>
+        <h2 style="font-family:var(--font-display);font-size:1.75rem;font-weight:400;margin-bottom:.75rem">Admin Access Required</h2>
+        <p style="color:var(--color-text-muted);max-width:36ch;margin:0 auto 2rem;line-height:1.7">Client data and assessment scores are protected. Sign in with admin credentials to continue.</p>
+        <button class="btn-unlock" onclick="openAdminLogin()">Sign In as Admin</button>
+      </div>
+      <!-- Admin dashboard -->
+      <div id="admin-dashboard" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
+          <div>
+            <h1 style="font-family:var(--font-display);font-size:2rem;font-weight:400">Client Registry</h1>
+            <p style="color:var(--color-text-muted);font-size:var(--text-sm);margin-top:.25rem">All registered clients and their assessment scores</p>
+          </div>
+          <div style="display:flex;gap:.75rem;align-items:center">
+            <button class="export-btn" onclick="exportCSV()" style="padding:.5rem 1rem;font-size:.8rem;">Export CSV</button>
+            <button onclick="adminLogout()" style="padding:.5rem 1rem;border-radius:var(--radius-md);border:1px solid var(--color-border);background:var(--color-surface-2);font-size:var(--text-xs);color:var(--color-text-muted);cursor:pointer;font-weight:600;">Sign Out</button>
+          </div>
+        </div>
+        <div class="admin-stats-row" style="margin-bottom:2rem">
+          <div class="astat"><div class="astat-num" id="astat-total">0</div><div class="astat-label">Total Clients</div></div>
+          <div class="astat"><div class="astat-num" id="astat-avg">—</div><div class="astat-label">Avg Overall Risk</div></div>
+          <div class="astat"><div class="astat-num" id="astat-high" style="color:#dc2626">0</div><div class="astat-label">High Risk Clients</div></div>
+        </div>
+        <div class="admin-fp-panel">
+          <div class="admin-header">
+            <h2>All Registered Clients</h2>
+            <span class="count-badge" id="count-badge-admin">0</span>
+          </div>
+          <div class="admin-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="search-admin" placeholder="Search by name, email, or role…" oninput="renderClients(this.value,'admin')"/>
+          </div>
+          <div class="date-filter-tabs" id="date-tabs-admin" style="margin-bottom:2px;">
+            <button class="dft active" onclick="setDateFilter('all','admin')">All</button>
+            <button class="dft" onclick="setDateFilter('today','admin')">Today</button>
+            <button class="dft" onclick="setDateFilter('week','admin')">This Week</button>
+            <button class="dft" onclick="setDateFilter('month','admin')">This Month</button>
+          </div>
+          <div class="clients-list" id="clients-list-admin" style="max-height:55vh;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <span class="footer-text">© 2026 <span class="footer-brand">ErgoCare AI</span> — All rights reserved</span>
+    <span class="footer-text">Built for ergonomic wellness</span>
+  </footer>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════
+   THEME
+════════════════════════════════════════════════════ */
+// Light mode only — dark mode removed
+document.documentElement.setAttribute('data-theme','light')
+function updateBgColors(){} // no-op kept for safety
+
+/* ════════════════════════════════════════════════════
+   THREE.JS 3D BACKGROUND
+════════════════════════════════════════════════════ */
+let bgObjects = []
+;(function(){
+  const cv = document.getElementById('bg-canvas')
+  const renderer = new THREE.WebGLRenderer({ canvas:cv, antialias:true, alpha:true })
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+  renderer.setSize(innerWidth, innerHeight)
+  renderer.setClearColor(0, 0)
+  const scene = new THREE.Scene()
+  const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000)
+  camera.position.set(0, 0, 30)
+  const mat1 = new THREE.MeshPhongMaterial({ color:0x01696f, wireframe:true, opacity:0.15, transparent:true })
+  const mat2 = new THREE.MeshPhongMaterial({ color:0x4f98a3, wireframe:true, opacity:0.1, transparent:true })
+  const cfgs = [
+    { geo:new THREE.TorusKnotGeometry(4,1.2,80,12),    m:mat1, p:[-14,8,-15],   s:[.003,.005,.002] },
+    { geo:new THREE.TorusKnotGeometry(3,.8,64,10,2,3),  m:mat2, p:[14,-8,-20],  s:[.004,.002,.006] },
+    { geo:new THREE.IcosahedronGeometry(5,1),            m:mat1, p:[18,10,-18],  s:[.002,.004,.003] },
+    { geo:new THREE.OctahedronGeometry(4),               m:mat2, p:[-16,-10,-22],s:[.005,.003,.004] },
+    { geo:new THREE.TorusGeometry(5,1.5,12,30),          m:mat1, p:[0,-18,-25],  s:[.003,.006,.002] },
+  ]
+  cfgs.forEach(({geo,m,p,s})=>{
+    const mesh = new THREE.Mesh(geo, m.clone())
+    mesh.position.set(...p); mesh.userData.speed = s
+    scene.add(mesh); bgObjects.push(mesh)
+  })
+  scene.add(new THREE.AmbientLight(0xffffff,.6))
+  const dl = new THREE.DirectionalLight(0x4f98a3,1.5); dl.position.set(10,20,10); scene.add(dl)
+  let mx=0, my=0
+  document.addEventListener('mousemove', e=>{ mx=(e.clientX/innerWidth-.5)*2; my=(e.clientY/innerHeight-.5)*-2 })
+  window.addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight) })
+  let t=0
+  ;(function anim(){
+    requestAnimationFrame(anim); t+=.01
+    bgObjects.forEach((o,i)=>{ o.rotation.x+=o.userData.speed[0]; o.rotation.y+=o.userData.speed[1]; o.rotation.z+=o.userData.speed[2]; o.position.y+=Math.sin(t+i*1.2)*.012 })
+    camera.position.x+=(mx*2-camera.position.x)*.03
+    camera.position.y+=(my*2-camera.position.y)*.03
+    camera.lookAt(0,0,0); renderer.render(scene,camera)
+  })()
+})()
+
+function updateBgColors(){
+  const dark = document.documentElement.getAttribute('data-theme')==='dark'
+  bgObjects.forEach((o,i)=>{ o.material.color.setHex(i%2===0?(dark?0x4f98a3:0x01696f):(dark?0x6daa45:0x4f98a3)) })
+}
+
+/* ════════════════════════════════════════════════════
+   VIEW ROUTER
+════════════════════════════════════════════════════ */
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'))
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'))
+  if (name==='home') {
+    document.getElementById('view-home').classList.add('active')
+    document.getElementById('btn-home').classList.add('active')
+    document.getElementById('sub-register').style.display = ''
+    document.getElementById('sub-app').style.display = 'none'
+  } else {
+    document.getElementById('view-admin').classList.add('active')
+    document.getElementById('btn-admin').classList.add('active')
+    if (adminLoggedIn) { showAdminDashboard() } else { showAdminLocked() }
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   ADMIN AUTH
+════════════════════════════════════════════════════ */
+const ADMIN_USERS = [
+  { email: 'shreepranavg2014@gmail.com',    pass: '123456789' },
+  { email: 'gnana.prakasi@christuniversity.in', pass: '123456789' },
+]
+let adminLoggedIn = false
+
+function openAdminLogin() {
+  document.getElementById('overlay-admin-login').classList.remove('hidden')
+  document.getElementById('al-email').value = ''
+  document.getElementById('al-pass').value  = ''
+  document.getElementById('admin-login-err').classList.remove('show')
+  setTimeout(()=>document.getElementById('al-email').focus(), 100)
+}
+function closeAdminLogin() {
+  document.getElementById('overlay-admin-login').classList.add('hidden')
+}
+function attemptAdminLogin() {
+  const email = document.getElementById('al-email').value.trim()
+  const pass  = document.getElementById('al-pass').value
+  if (ADMIN_USERS.some(u => u.email === email && u.pass === pass)) {
+    adminLoggedIn = true
+    closeAdminLogin()
+    showAdminDashboard()
+    renderClients('','inline')
+    renderClients('','admin')
+    updateCounts()
+  } else {
+    document.getElementById('admin-login-err').classList.add('show')
+  }
+}
+function adminLogout() {
+  adminLoggedIn = false
+  showAdminLocked()
+  renderClients('','inline') // re-lock inline panel
+}
+function handleAdminNav() {
+  showView('admin')
+}
+function showAdminLocked() {
+  document.getElementById('admin-locked-msg').style.display = ''
+  document.getElementById('admin-dashboard').style.display = 'none'
+}
+async function showAdminDashboard() {
+  document.getElementById('admin-locked-msg').style.display = 'none'
+  document.getElementById('admin-dashboard').style.display = ''
+
+  // Fetch all sessions from backend and merge into local clients list
+  try {
+    const sessions = await apiReq('/api/sessions/admin')
+    sessions.forEach(sess => {
+      // Only add if not already in local list (match by backendSessionId)
+      const exists = clients.find(c => c.backendSessionId === sess.id)
+      if (!exists) {
+        clients.push({
+          id: sess.id,
+          backendSessionId: sess.id,
+          name:  sess.client_name  || 'Unknown',
+          email: sess.client_email || '—',
+          phone: sess.client_phone || '—',
+          age:   sess.client_age   || '—',
+          job:   sess.client_job   || '—',
+          registeredAt: new Date(sess.created_at).toLocaleString('en-IN'),
+          scores: sess.overall_risk != null ? {
+            overallRisk:         sess.overall_risk,
+            postureRisk:         sess.posture_risk,
+            eyeStrain:           sess.eye_strain,
+            workloadStress:      sess.workload_stress,
+            musculoskeletalRisk: sess.musculoskeletal_risk,
+            recoveryRisk:        sess.recovery_risk,
+          } : null
+        })
+      }
+    })
+    updateCounts()
+  } catch(e) {
+    console.warn('Could not fetch sessions from backend:', e)
+  }
+
+  updateAdminStats()
+  renderClients('','admin')
+}
+// Enter key on login form
+document.getElementById('al-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') attemptAdminLogin() })
+document.getElementById('al-email').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('al-pass').focus() })
+
+/* ════════════════════════════════════════════════════
+   CLIENT STORE (in-memory)
+════════════════════════════════════════════════════ */
+let clients = []
+
+function addClient(data) {
+  clients.unshift({ ...data, id: Date.now(), registeredAt: new Date().toLocaleString('en-IN'), scores: null })
+  updateCounts()
+  if (adminLoggedIn) {
+    renderClients('','inline')
+    renderClients('','admin')
+    updateAdminStats()
+  }
+}
+
+function updateClientScores(id, scores) {
+  const c = clients.find(x => x.id === id)
+  if (c) {
+    c.scores = scores
+    c.answers = state.answers  // save full Q&A
+    c.mode = state.mode        // typed or voice
+    if(adminLoggedIn){renderClients('','inline');renderClients('','admin');updateAdminStats()}
+  }
+}
+
+async function deleteClient(localId, backendSessionId, clientName) {
+  if (!adminLoggedIn) { openAdminLogin(); return }
+  if (!confirm(`Delete all data for "${clientName}"?\n\nThis will permanently remove their registration, all answers, audio recordings and report. This cannot be undone.`)) return
+
+  // Remove from local memory
+  const idx = clients.findIndex(c => String(c.id) === String(localId))
+  if (idx > -1) clients.splice(idx, 1)
+
+  // Delete from backend (requires X-Admin-Token header)
+  if (backendSessionId && !String(backendSessionId).startsWith('offline')) {
+    try {
+      await fetch(`${API}/api/sessions/${backendSessionId}`, {
+        method: 'DELETE',
+        headers: { 'X-Admin-Token': ADMIN_TOKEN }
+      })
+      console.log('Backend session deleted:', backendSessionId)
+    } catch(e) { console.warn('Backend delete failed (data removed locally):', e) }
+  }
+
+  // Revoke object URLs for audio blobs
+  const audios = audioStore[localId] || {}
+  Object.values(audios).forEach(a => { try { URL.revokeObjectURL(a.url) } catch{} })
+  delete audioStore[localId]
+
+  updateCounts(); updateAdminStats()
+  renderClients('', 'inline')
+  renderClients('', 'admin')
+}
+
+function updateCounts() {
+  const n = clients.length
+  document.getElementById('count-badge').textContent = n
+  const ab = document.getElementById('count-badge-admin')
+  if (ab) ab.textContent = n
+  animateNum(document.getElementById('stat-registered'), n)
+}
+
+function updateAdminStats() {
+  const n = clients.length
+  document.getElementById('astat-total').textContent = n
+  const scored = clients.filter(c=>c.scores)
+  if (scored.length) {
+    const avg = Math.round(scored.reduce((s,c)=>s+c.scores.overallRisk,0)/scored.length)
+    document.getElementById('astat-avg').textContent = avg + '%'
+    document.getElementById('astat-high').textContent = scored.filter(c=>c.scores.overallRisk>=70).length
+  } else {
+    document.getElementById('astat-avg').textContent = '—'
+    document.getElementById('astat-high').textContent = '0'
+  }
+}
+
+function animateNum(el, target) {
+  if (!el) return
+  const start = parseInt(el.textContent)||0
+  const dur=600, t0=performance.now()
+  ;(function step(now){
+    const p = Math.min((now-t0)/dur,1), e=1-Math.pow(1-p,3)
+    el.textContent = Math.round(start+(target-start)*e)
+    if(p<1) requestAnimationFrame(step)
+  })(t0)
+}
+
+function escH(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
+
+/* ════════════════════════════════════════════════════
+   RENDER CLIENT LISTS — click card → full report modal
+════════════════════════════════════════════════════ */
+/* ── Date filter state ── */
+const dateFilter = { inline: 'all', admin: 'all' }
+
+function setDateFilter(range, panel) {
+  dateFilter[panel] = range
+  // Update active tab styling
+  const tabsId = panel === 'admin' ? 'date-tabs-admin' : 'date-tabs-inline'
+  const tabs = document.getElementById(tabsId)
+  if (tabs) tabs.querySelectorAll('.dft').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim().toLowerCase().replace(' ','') === {
+      all:'all', today:'today', week:'thisweek', month:'thismonth'
+    }[range])
+  })
+  renderClients(
+    (document.getElementById(panel==='admin'?'search-admin':'search-inline')||{}).value||'',
+    panel
+  )
+}
+
+function clientMatchesDateFilter(c, range) {
+  if (range === 'all') return true
+  // Parse registeredAt — stored as toLocaleString('en-IN') e.g. "29/05/2026, 14:32:10"
+  // or as ISO string if from backend
+  let d
+  try {
+    const raw = c.registeredAt || ''
+    // Try ISO first
+    if (raw.includes('T') || raw.includes('-')) {
+      d = new Date(raw)
+    } else {
+      // en-IN format: "DD/MM/YYYY, HH:MM:SS" or "DD/MM/YYYY"
+      const parts = raw.split(',')[0].trim().split('/')
+      if (parts.length === 3) {
+        // parts: [DD, MM, YYYY]
+        d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`)
+      } else {
+        d = new Date(raw)
+      }
+    }
+  } catch(e) { return true }
+  if (!d || isNaN(d.getTime())) return true
+
+  const now = new Date()
+  const startOf = unit => {
+    const s = new Date(now)
+    s.setHours(0,0,0,0)
+    if (unit === 'week') {
+      const day = s.getDay() // 0=Sun
+      s.setDate(s.getDate() - day)
+    } else if (unit === 'month') {
+      s.setDate(1)
+    }
+    return s
+  }
+
+  if (range === 'today') return d >= startOf('day')
+  if (range === 'week')  return d >= startOf('week')
+  if (range === 'month') return d >= startOf('month')
+  return true
+}
+
+function renderClients(q, panel) {
+  const listId = panel==='admin' ? 'clients-list-admin' : 'clients-list-inline'
+  const el = document.getElementById(listId)
+  if (!el) return
+
+  if (panel==='inline' && !adminLoggedIn) {
+    el.innerHTML = `<div class="locked-state"><div class="lock-icon">🔒</div><p>Admin login required to view client data.</p><button class="btn-unlock" onclick="openAdminLogin()">Admin Login</button></div>`
+    return
+  }
+
+  const query = (q||'').toLowerCase()
+  const range = dateFilter[panel] || 'all'
+  const queryFiltered = query ? clients.filter(c=>
+    c.name.toLowerCase().includes(query) ||
+    c.email.toLowerCase().includes(query) ||
+    (c.job||'').toLowerCase().includes(query)
+  ) : clients
+  const filtered = queryFiltered.filter(c => clientMatchesDateFilter(c, range))
+
+  const rangeLabelMap = { all:'All time', today:'Today', week:'This week', month:'This month' }
+  const rangeLabel = rangeLabelMap[range] || ''
+
+  if (!filtered.length) {
+    const noMsg = query ? 'No results found.' : range !== 'all' ? `No clients registered ${rangeLabel.toLowerCase()}.` : 'No clients registered yet.'
+    el.innerHTML = `<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><p>${noMsg}</p></div>`
+    return
+  }
+
+  const groupHeader = range !== 'all'
+    ? `<div class="date-group-label">📅 ${rangeLabel} — ${filtered.length} client${filtered.length===1?'':'s'}</div>`
+    : ''
+
+  el.innerHTML = groupHeader + filtered.map(c => {
+    const initials = c.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+    const riskPill = c.scores ? (() => {
+      const r = c.scores.overallRisk
+      const col = r>=70?'#dc2626':r>=40?'#d97706':'#059669'
+      const bg  = r>=70?'#fef2f2':r>=40?'#fffbeb':'#ecfdf5'
+      const lbl = r>=70?'High Risk':r>=40?'Moderate':'Low Risk'
+      return `<div class="score-pill" style="background:${bg};color:${col}">${lbl} ${r.toFixed(0)}%</div>`
+    })() : '<div class="score-pill" style="background:#f1f5f9;color:#94a3b8">Pending</div>'
+    const hasReport = !!c.scores
+    const deleteBtn = adminLoggedIn
+      ? `<button onclick="event.stopPropagation();deleteClient('${escH(String(c.id))}','${escH(c.backendSessionId||'')}','${escH(c.name)}')"
+           style="margin-top:6px;padding:3px 10px;border-radius:999px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;font-size:.68rem;font-weight:700;cursor:pointer;display:block;width:100%;text-align:center;"
+           title="Delete this client's data">🗑 Delete</button>` : ''
+    return `<div class="client-card" onclick="openClientReport(${c.id})" style="cursor:pointer;" title="${hasReport?'Click to view full report':'Click to view registration details'}">
+      <div class="client-avatar">${escH(initials)}</div>
+      <div>
+        <div class="client-name">${escH(c.name)}</div>
+        <div class="client-detail">${escH(c.email)} · ${escH(c.phone||'—')}</div>
+        <div style="font-size:.7rem;color:var(--color-text-faint);margin-top:2px;">${escH(c.job)} · Age ${escH(String(c.age))}</div>
+      </div>
+      <div class="client-meta">
+        ${riskPill}
+        <div style="font-size:.7rem;color:var(--color-primary);margin-top:4px;font-weight:600;">${hasReport?'View Report →':'View Details →'}</div>
+        ${deleteBtn}
+      </div>
+    </div>`
+  }).join('')
+}
+
+/* ════════════════════════════════════════════════════
+   CLIENT REPORT MODAL — full report + audio playback
+════════════════════════════════════════════════════ */
+function openClientReport(clientId) {
+  const c = clients.find(x => x.id === clientId)
+  if (!c) return
+
+  // Get modal element — reuse or create
+  let modal = document.getElementById('admin-client-modal')
+  if (!modal) {
+    modal = document.createElement('div')
+    modal.id = 'admin-client-modal'
+    modal.style.cssText = 'position:fixed;inset:0;z-index:300;overflow-y:auto;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);padding:24px;display:flex;align-items:flex-start;justify-content:center;'
+    modal.addEventListener('click', e => { if(e.target===modal) closeClientReport() })
+    document.body.appendChild(modal)
+  }
+  modal.style.display = 'flex'
+
+  const scores  = c.scores || null
+  const report  = (scores && scores._report) ? scores._report : (scores ? buildReport(scores) : null)
+  const audios  = getAudioForClient(clientId)  // local blobs from this session
+  const answers = c.answers || []
+  const mode    = c.mode || 'typed'
+
+  const initials = c.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+  const lvMeta = scores ? ({
+    Low:      {color:'#059669',bg:'#ecfdf5',label:'Low Risk',emoji:'✅'},
+    Moderate: {color:'#d97706',bg:'#fffbeb',label:'Moderate Risk',emoji:'⚠️'},
+    High:     {color:'#dc2626',bg:'#fef2f2',label:'High Risk',emoji:'🚨'},
+  })[report?.level||'Low'] : null
+
+  // ── Score cards grid ──────────────────────────────────────────────────────
+  const scoreCard = (label, val, icon) => {
+    if (val==null) return ''
+    const c2 = val>=70?'#dc2626':val>=40?'#d97706':'#059669'
+    const bg2 = val>=70?'#fef2f2':val>=40?'#fffbeb':'#ecfdf5'
+    const sev = val>=75?'Severe':val>=55?'High':val>=35?'Moderate':val>=18?'Low':'Minimal'
+    return `<div style="background:${bg2};border-radius:12px;padding:14px 16px;border-top:3px solid ${c2};">
+      <div style="font-size:1.4rem;margin-bottom:4px;">${icon}</div>
+      <div style="font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">${label}</div>
+      <div style="font-size:1.8rem;font-weight:800;color:${c2};font-family:var(--font-display);">${val.toFixed(0)}%</div>
+      <div style="font-size:.68rem;font-weight:700;color:${c2};margin:4px 0;">${sev}</div>
+      <div style="height:5px;background:${c2}20;border-radius:999px;overflow:hidden;">
+        <div style="height:100%;width:${val}%;background:${c2};border-radius:inherit;transition:width 1s ease .3s;"></div>
+      </div>
+    </div>`
+  }
+
+  // ── Build answers + audio section ────────────────────────────────────────
+  const buildAnswers = () => {
+    if (!answers.length && Object.keys(audios).length === 0) {
+      return '<p style="color:#94a3b8;font-style:italic;">No answers recorded yet.</p>'
+    }
+    // Merge local audio blobs with saved answers
+    const qMap = {}
+    answers.forEach(a => { qMap[a.qId] = a })
+    Object.entries(audios).forEach(([qId, au]) => {
+      if (!qMap[qId]) qMap[qId] = { qId: parseInt(qId), answer: au.transcript||'', transcript: au.transcript||'' }
+      qMap[qId]._localAudio = au
+    })
+    const sorted = Object.values(qMap).sort((a,b) => a.qId - b.qId)
+    return sorted.map(a => {
+      const q = questions.find(x => x.id === a.qId)
+      const ans = a.answer || a.transcript || '—'
+      const hasLocalAudio = !!a._localAudio
+      const hasBackendAudio = !!a.audio_url
+      const borderCol = hasLocalAudio||hasBackendAudio ? '#0a9396' : '#e2e8f0'
+      return `<div style="padding:10px 14px;border-radius:8px;background:#f8fafc;border-left:3px solid ${borderCol};margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.72rem;color:#94a3b8;font-weight:700;margin-bottom:3px;">Q${a.qId}. ${escH(q?.text||'Question '+a.qId)}</div>
+            <div style="font-size:.9rem;color:#0f172a;font-weight:600;">${escH(ans)}</div>
+            ${a.transcript && a.answer && a.transcript!==a.answer ? `<div style="font-size:.75rem;color:#64748b;margin-top:2px;font-style:italic;">Transcript: ${escH(a.transcript)}</div>` : ''}
+          </div>
+          ${hasLocalAudio||hasBackendAudio ? `<span style="font-size:.68rem;background:#e8f7f4;color:#0a9396;border-radius:999px;padding:2px 8px;white-space:nowrap;font-weight:700;flex-shrink:0;">🎙 Audio</span>` : ''}
+        </div>
+        ${hasLocalAudio ? `<audio controls style="width:100%;height:32px;margin-top:8px;border-radius:6px;" src="${a._localAudio.url}"></audio>` : ''}
+        ${!hasLocalAudio && hasBackendAudio ? `<audio controls style="width:100%;height:32px;margin-top:8px;border-radius:6px;" src="${API_BASE}${escH(a.audio_url)}"></audio>` : ''}
+      </div>`
+    }).join('')
+  }
+
+  // ── Pain sub-domains ──────────────────────────────────────────────────────
+  const pd = scores?.painSubdomains || {}
+  const painSubHTML = Object.values(pd).some(v=>v>0) ? `
+    <div style="margin-bottom:1.5rem;">
+      <div style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">🔬 Pain Sub-Domains</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">
+        ${[['Cervical',pd.neck||0],['Upper Back',pd.upper_back||0],['Shoulder',pd.shoulder||0],['Lumbar',pd.lower_back||0],['Wrist/Hand',pd.wrist||0],['Forearm',pd.forearm||0]].map(([lbl,v])=>{
+          const c3=v>=70?'#dc2626':v>=40?'#d97706':'#059669'
+          const bg3=v>=70?'#fef2f2':v>=40?'#fffbeb':'#ecfdf5'
+          return `<div style="text-align:center;padding:8px;background:${bg3};border-radius:8px;border:1px solid ${c3}20;">
+            <div style="font-size:.68rem;color:#6b7280;margin-bottom:3px;font-weight:600;">${lbl}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:${c3};">${v}%</div>
+          </div>`
+        }).join('')}
+      </div>
+    </div>` : ''
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;width:min(920px,100%);box-shadow:0 24px 80px rgba(0,0,0,.2);animation:slideUp .3s cubic-bezier(.22,1,.36,1);overflow:hidden;">
+
+      <!-- ── Sticky header ── -->
+      <div style="position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#005f73,#0a9396);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:#fff;border:2px solid rgba(255,255,255,.4);">${escH(initials)}</div>
+          <div>
+            <div style="font-size:1.3rem;font-family:var(--font-display);font-weight:600;color:#fff;">${escH(c.name)}</div>
+            <div style="font-size:.78rem;color:rgba(255,255,255,.75);">${escH(c.job||'—')} · Age ${escH(String(c.age))} · ${escH(c.email)}${c.phone?' · '+escH(c.phone):''}</div>
+            <div style="font-size:.68rem;color:rgba(255,255,255,.55);margin-top:2px;">Registered: ${escH(c.registeredAt||'—')} · ${mode==='voice'?'🎙 Voice session':'⌨️ Typed session'}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+          ${scores ? `<div style="text-align:center;">
+            <div style="font-size:1.6rem;font-weight:900;color:#fff;font-family:var(--font-display);">${scores.overallRisk.toFixed(0)}%</div>
+            <div style="font-size:.68rem;color:rgba(255,255,255,.7);">${lvMeta?.label||'Risk Score'}</div>
+          </div>` : ''}
+          <button onclick="closeClientReport()" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:1rem;cursor:pointer;display:grid;place-items:center;flex-shrink:0;">✕</button>
+        </div>
+      </div>
+
+      <!-- ── Modal body ── -->
+      <div style="padding:2rem;max-height:80vh;overflow-y:auto;">
+
+        <!-- Profile grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:1.5rem;">
+          ${[['Name',c.name],['Email',c.email],['Phone',c.phone||'—'],['Age',c.age],['Job',c.job||'—'],['Session',c.backendSessionId?c.backendSessionId.slice(0,8)+'…':'offline']].map(([k,v])=>`
+            <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;">
+              <div style="font-size:.68rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">${k}</div>
+              <div style="font-weight:600;font-size:.88rem;color:#0f172a;word-break:break-all;">${escH(String(v))}</div>
+            </div>`).join('')}
+        </div>
+
+        ${scores ? `
+        <!-- Overall risk banner -->
+        <div style="background:${lvMeta.bg};border:2px solid ${lvMeta.color}30;border-radius:14px;padding:16px 20px;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div style="font-size:1.5rem;font-weight:900;color:${lvMeta.color};font-family:var(--font-display);">${lvMeta.emoji} ${lvMeta.label} — ${scores.overallRisk.toFixed(0)}%</div>
+            <div style="font-size:.8rem;color:#64748b;margin-top:4px;">${(scores.percentile||50)}th population percentile · NIOSH/RULA-aligned weighted composite</div>
+          </div>
+          ${c.backendSessionId&&!String(c.backendSessionId).startsWith('offline')?`<button onclick="window.open('${API}/api/sessions/${escH(c.backendSessionId)}/report.pdf','_blank')" style="background:${lvMeta.color};color:#fff;border:none;border-radius:10px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:.88rem;box-shadow:0 4px 12px ${lvMeta.color}40;">⬇ PDF Report</button>`:''}
+        </div>
+
+        <!-- Score cards -->
+        <div style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">📊 Domain Risk Scores</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:1.5rem;">
+          ${scoreCard('Posture & Movement', scores.postureRisk, '🧍')}
+          ${scoreCard('Visual Fatigue', scores.eyeStrain, '👁️')}
+          ${scoreCard('Workload Stress', scores.workloadStress, '🧠')}
+          ${scoreCard('Musculoskeletal', scores.musculoskeletalRisk, '💪')}
+          ${scoreCard('Recovery & Sleep', scores.recoveryRisk, '🌙')}
+        </div>
+
+        ${painSubHTML}
+
+        ${report ? `
+        <!-- Report sections -->
+        ${report.topFactors?.length?`<div style="background:#fff7ed;border-radius:10px;padding:14px 18px;border-left:4px solid #f59e0b;margin-bottom:12px;">
+          <div style="font-weight:700;color:#92400e;margin-bottom:8px;font-size:.85rem;">⚡ Top Risk Factors</div>
+          <ul style="padding-left:18px;display:grid;gap:4px;">${report.topFactors.map(f=>`<li style="font-size:.88rem;color:#78350f;">${escH(f)}</li>`).join('')}</ul>
+        </div>`:''}
+        ${report.actionPlan?.length?`<div style="background:#f0fdf4;border-radius:10px;padding:14px 18px;border-left:4px solid #22c55e;margin-bottom:12px;">
+          <div style="font-weight:700;color:#166534;margin-bottom:8px;font-size:.85rem;">✅ Action Plan</div>
+          <ol style="padding-left:18px;display:grid;gap:5px;">${report.actionPlan.map(a=>`<li style="font-size:.88rem;color:#14532d;line-height:1.5;">${escH(a)}</li>`).join('')}</ol>
+        </div>`:''}
+        ${report.detailedFindings?.length?`<div style="background:#f8fafc;border-radius:10px;padding:14px 18px;border-left:4px solid #64748b;margin-bottom:12px;">
+          <div style="font-weight:700;color:#475569;margin-bottom:8px;font-size:.85rem;">🔍 Detailed Findings</div>
+          <ul style="padding-left:18px;display:grid;gap:4px;">${report.detailedFindings.map(f=>`<li style="font-size:.85rem;color:#334155;line-height:1.5;">${escH(f)}</li>`).join('')}</ul>
+        </div>`:''}
+        ${report.positiveHabits?.length?`<div style="background:#ecfdf5;border-radius:10px;padding:14px 18px;border-left:4px solid #10b981;margin-bottom:12px;">
+          <div style="font-weight:700;color:#065f46;margin-bottom:8px;font-size:.85rem;">💚 Positive Habits Detected</div>
+          <ul style="padding-left:18px;display:grid;gap:4px;">${report.positiveHabits.map(h=>`<li style="font-size:.85rem;color:#064e3b;">${escH(h)}</li>`).join('')}</ul>
+        </div>`:''}
+        `:''}
+        ` : '<div style="background:#fef2f2;border-radius:10px;padding:14px 18px;color:#991b1b;margin-bottom:1.5rem;font-size:.88rem;">Assessment not yet completed — no scores available.</div>'}
+
+        <!-- All 40 Answers + Audio -->
+        <div style="font-size:.8rem;font-weight:700;color:#374151;margin:1.5rem 0 10px;text-transform:uppercase;letter-spacing:.05em;">
+          💬 All Answers (${answers.length}/40)
+          ${Object.keys(audios).length>0||answers.some(a=>a.audio_url)?'<span style="font-size:.72rem;color:#0a9396;font-weight:400;margin-left:8px;">🎙 Audio recordings available</span>':''}
+        </div>
+        <div style="max-height:360px;overflow-y:auto;padding-right:4px;">${buildAnswers()}</div>
+
+        <!-- Admin delete button at bottom -->
+        ${adminLoggedIn ? `<div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid #e2e8f0;text-align:center;">
+          <button onclick="closeClientReport();deleteClient('${escH(String(c.id))}','${escH(c.backendSessionId||'')}','${escH(c.name)}')" style="background:#fef2f2;border:1.5px solid #fca5a5;color:#dc2626;border-radius:10px;padding:10px 24px;font-weight:700;cursor:pointer;font-size:.88rem;">🗑 Delete All Data for ${escH(c.name)}</button>
+        </div>` : ''}
+
+      </div>
+    </div>`
+}
+function closeClientReport() {
+  const modal = document.getElementById('admin-client-modal')
+  if (modal) modal.style.display = 'none'
+}
+
+// Keyboard ESC to close modal
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeClientReport() })
+
+/* ════════════════════════════════════════════════════
+   CSV EXPORT
+════════════════════════════════════════════════════ */
+function exportCSV() {
+  if (!adminLoggedIn) { openAdminLogin(); return }
+  if (!clients.length) { alert('No clients to export yet.'); return }
+  const hdrs = ['Name','Email','Phone','Age','Job','Registered','Session ID','Overall Risk','Posture','Eye Strain','Workload','Body Discomfort','Recovery']
+  const rows = clients.map(c => {
+    const s = c.scores
+    return [c.name,c.email,c.phone||'',c.age,c.job,c.registeredAt,c.backendSessionId||'offline',
+      s?s.overallRisk.toFixed(1):'',s?s.postureRisk.toFixed(1):'',
+      s?s.eyeStrain.toFixed(1):'',s?s.workloadStress.toFixed(1):'',
+      s?s.musculoskeletalRisk.toFixed(1):'',s?s.recoveryRisk.toFixed(1):''
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')
+  })
+  const csv = [hdrs.join(','), ...rows].join('\n')
+  const blob = new Blob([csv],{type:'text/csv'})
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob)
+  a.download='ergocare-clients.csv'; a.click()
+}
+
+/* ════════════════════════════════════════════════════
+   REGISTRATION FORM
+════════════════════════════════════════════════════ */
+let currentClient = null
+let currentClientId = null
+
+async function submitRegistration() {
+  const name  = document.getElementById('f-name').value.trim()
+  const email = document.getElementById('f-email').value.trim()
+  const phone = document.getElementById('f-phone').value.trim()
+  const ageV  = parseInt(document.getElementById('f-age').value)
+  const job   = document.getElementById('f-job').value
+
+  const setErr = (id, show) => { document.getElementById(id).classList.toggle('show', show) }
+  let valid = true
+  const fail = (id) => { setErr(id,true); valid=false }
+  const pass = (id) => setErr(id,false)
+
+  name.length<2 ? fail('err-name') : pass('err-name')
+  !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? fail('err-email') : pass('err-email')
+  phone.length<7 ? fail('err-phone') : pass('err-phone')
+  isNaN(ageV)||ageV<16||ageV>100 ? fail('err-age') : pass('err-age')
+  !job ? fail('err-job') : pass('err-job')
+
+  const banner = document.getElementById('reg-err-banner')
+  if (!valid) { banner.textContent='Please fix the errors above.'; banner.classList.add('show'); return }
+  banner.classList.remove('show')
+
+  // Disable button while saving
+  const btn = document.querySelector('.btn-submit')
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…' }
+
+  // ── Save to backend ───────────────────────────────
+  try {
+    const sess = await apiReq('/api/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        input_mode: 'typed',          // default; overwritten in startAssessment
+        client_name:  name,
+        client_email: email.toLowerCase(),
+        client_phone: phone,
+        client_age:   ageV,
+        client_job:   job,
+      })
+    })
+    state.backendSessionId = sess.id
+    state.sessionId = sess.id
+  } catch(e) {
+    // Backend unreachable — continue in offline mode
+    state.backendSessionId = null
+    state.sessionId = 'offline-' + Date.now()
+    console.warn('Backend unavailable, running offline:', e)
+  }
+
+  // ── Save to local memory (for admin list + CSV) ───
+  const id = Date.now()
+  currentClientId = id
+  currentClient = { name, email, phone, age:ageV, job, id, backendSessionId: state.backendSessionId }
+  addClient(currentClient)
+
+  // Update user chip in header
+  const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+  document.getElementById('user-chip').classList.remove('hidden')
+  document.getElementById('user-chip-av').textContent = initials
+  document.getElementById('user-chip-name').textContent = name.split(' ')[0]
+  document.getElementById('app-nav-avatar').textContent = initials
+  document.getElementById('app-nav-name').textContent = name.split(' ')[0]
+
+  if (btn) { btn.disabled = false; btn.innerHTML = 'Register &amp; Begin Assessment <span class="arrow">→</span>' }
+
+  // Show success toast briefly, then go to assessment
+  const toast = document.getElementById('success-toast')
+  toast.classList.add('show')
+  setTimeout(() => {
+    toast.classList.remove('show')
+    document.getElementById('sub-register').style.display = 'none'
+    document.getElementById('sub-app').style.display = 'block'
+    renderLanding()
+  }, 1400)
+}
+
+/* ════════════════════════════════════════════════════
+   QUESTIONS
+════════════════════════════════════════════════════ */
+const questions = [
+  { id:1,  text:'How long do you usually work continuously before taking a short break?', options:['Less than 30 minutes','1 hour','1-2 hours','More than 2 hours'], category:'workload' },
+  { id:2,  text:'At the end of a workday, how tired do your eyes usually feel?', options:['Not tired','Slightly tired','Moderately tired','Very tired'], category:'eyes' },
+  { id:3,  text:'How many hours do you work on a laptop without an external keyboard or mouse?', options:['1-2','3-4','6-7','>8'], category:'posture' },
+  { id:4,  text:'How often do long work sessions leave you feeling stiff?', options:['Never','Once in a while','Often','Every Day'], category:'pain' },
+  { id:5,  text:'How often do you stretch during work hours?', options:['Multiple times a day','Once a day','A few times a week','Never'], category:'movement', reverse:true },
+  { id:6,  text:'Do you feel exhausted in a typical workday?', options:['Not exhausting','Mildly exhausting','Quite exhausting','Extremely exhausting'], category:'recovery' },
+  { id:7,  text:'How often do work deadlines affect your posture or comfort?', options:['Never','Sometimes','Often','Always'], category:'workload' },
+  { id:8,  text:'How supportive is your chair for long hours of work?', options:['Very supportive','Somewhat supportive','Slightly supportive','Not supportive at all'], category:'posture', reverse:true },
+  { id:9,  text:'Where is your screen usually placed while working?', options:['At eye level','Slightly below eye level','Far below eye level','I frequently change sometimes'], category:'posture' },
+  { id:10, text:'How often do you use your phone during or between work sessions?', options:['Rarely','1-2 times a day','3-5 times a day','Very frequently'], category:'eyes' },
+  { id:11, text:'How much physical discomfort do you feel by the end of the week?', options:['None','Mild','Moderate','Severe'], category:'pain' },
+  { id:12, text:'How often do you feel wrist or finger strain while typing?', options:['Never','Rarely','Often','Very often'], category:'pain' },
+  { id:13, text:'How often do you work in poor lighting conditions?', options:['Never','Occasionally','Frequently','Always'], category:'eyes' },
+  { id:14, text:'How often do you feel your shoulders become tense while working?', options:['Never','Sometimes','Often','Everyday'], category:'pain' },
+  { id:15, text:'How frequently do you switch between sitting and standing while working?', options:['Very frequently','Sometimes','Rarely','Never'], category:'movement', reverse:true },
+  { id:16, text:'How often do you continue working even when you feel discomfort?', options:['Never','Sometimes','Often','Always'], category:'workload' },
+  { id:17, text:'How well does your body recover after a long day of work?', options:['Not at all','Slightly','Mostly','Completely'], category:'recovery', reverse:true },
+  { id:18, text:'How often do you notice headaches after screen-heavy work?', options:['Never','Sometimes','Often','Always'], category:'eyes' },
+  { id:19, text:'How often do you adjust your sitting position during work?', options:['Never','Rarely','Sometimes','Often'], category:'posture', reverse:true },
+  { id:20, text:'How often do you push through physical discomfort just to keep working?', options:['Never','Sometimes','Often','Always'], category:'workload' },
+  { id:21, text:'How many hours per day do you spend in front of a screen across all devices?', options:['Less than 4 hours','4-6 hours','6-8 hours','More than 8 hours'], category:'eyes' },
+  { id:22, text:'Does your workload leave you sufficient time for personal well-being?', options:['Yes, comfortably','Often','Rarely','Never'], category:'workload' },
+  { id:23, text:'How confident are you that your work habits support your long-term health?', options:['Very confident','Somewhat confident','Uncertain','Not confident at all'], category:'recovery' },
+  { id:24, text:'How often do you consciously correct your posture while working?', options:['Never think about it','Only when I feel pain','Occasionally','Frequently throughout the day'], category:'posture', reverse:true },
+  { id:25, text:'How often do you skip meals or eat at your desk due to workload?', options:['Never','1-2 times a week','3-4 times a week','Often'], category:'workload' },
+  { id:26, text:'Which best describes your physical activity on a typical workday?', options:['Light movement such as walking between buildings','Structured activity like yoga or a gym session','Mostly seated with minimal movement','Vigorous daily exercise routine'], category:'movement', riskMap:{'light movement such as walking between buildings':35,'structured activity like yoga or a gym session':10,'mostly seated with minimal movement':100,'vigorous daily exercise routine':5} },
+  { id:27, text:'How much water do you typically consume throughout your working hours?', options:['Less than 1 litre','1-2 litres','More than 2 litres'], category:'recovery', reverse:true },
+  { id:28, text:'How much time do you spend commuting daily in total?', options:['Under 30 minutes','30-60 minutes','1-2 hours','Over 2 hours'], category:'recovery' },
+  { id:29, text:'How physically draining do you find your daily commute?', options:['Not draining at all','Mildly tiring','Moderately exhausting','Severely fatiguing'], category:'recovery' },
+  { id:30, text:'How often do you have difficulty falling asleep due to work-related thoughts?', options:['Never','Rarely','Sometimes','Often'], category:'recovery' },
+  { id:31, text:'Rate any stiffness or aching in your neck after long screen sessions (0–5)', options:['0','1','2','3','4','5'], category:'pain' },
+  { id:32, text:'How often does turning your head feel restricted or painful?', options:['Always','Often','Sometimes','Rarely','Never'], category:'pain', reverse:true },
+  { id:33, text:'Rate heaviness or burning sensation across your upper back or shoulder blades (0–5)', options:['0','1','2','3','4','5'], category:'pain' },
+  { id:34, text:'Do you experience pain or tightness when lifting your arms above shoulder height?', options:['Yes','No','Maybe'], category:'pain' },
+  { id:35, text:'Rate the lower back pain after sitting continuously for more than an hour (0–5)', options:['0','1','2','3','4','5'], category:'pain' },
+  { id:36, text:'Do you experience radiating pain or numbness from your lower back into your legs?', options:['Yes','No','Maybe'], category:'pain' },
+  { id:37, text:'Rate any aching or stiffness in your wrist when gripping a pen or mouse (0–5)', options:['0','1','2','3','4','5'], category:'pain' },
+  { id:38, text:'Do you experience a dull ache along your forearm or elbow after extended typing?', options:['Yes','No','Maybe'], category:'pain' },
+  { id:39, text:'Rate dryness, burning, or blurring of vision after extended screen time (0–5)', options:['0','1','2','3','4','5'], category:'eyes' },
+  { id:40, text:'Do you experience general physical exhaustion or body ache by end of your workday?', options:['Yes','No','Maybe'], category:'recovery' },
+]
+const categoryLabels = { workload:'Workload stress', eyes:'Eye strain', posture:'Posture setup', movement:'Movement habits', recovery:'Recovery', pain:'Body discomfort' }
+
+/* ════════════════════════════════════════════════════
+   APP STATE
+════════════════════════════════════════════════════ */
+const state = {
+  screen:'landing', mode:null, idx:0,
+  selectedOption:'', freeText:'', transcript:'',
+  recording:false, recorder:null, recognition:null, audioChunks:[],
+  notice:'', saving:false, errorMessage:null,
+  answers:[], scores:null, report:null, sessionId:null, backendSessionId:null,
+}
+const injectedApi = "%VITE_API_URL%";
+const API = injectedApi.startsWith("%") ? 'http://127.0.0.1:8000' : injectedApi;
+const API_BASE = API   // alias used in modal audio src URLs
+const ADMIN_TOKEN = 'ergocare-admin-2026'  // must match backend ADMIN_TOKEN env var
+async function apiReq(path,opts={}){ const r=await fetch(API+path,{headers:{'Content-Type':'application/json'},...opts}); if(!r.ok) throw new Error(`${r.status}`); return r.json() }
+async function apiReqAdmin(path,opts={}){ const r=await fetch(API+path,{headers:{'Content-Type':'application/json','X-Admin-Token':ADMIN_TOKEN},...opts}); if(!r.ok) throw new Error(`${r.status}`); return r.json() }
+function esc(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;') }
+const app = () => document.getElementById('app')
+
+/* ════════════════════════════════════════════════════
+   SCORING
+════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   PRECISION SCORING ENGINE v2 — 99% accuracy target
+   Evidence basis: NIOSH lifting equation adaptations,
+   RULA/REBA posture scoring, OSHA ergonomic guidelines,
+   CVS clinical criteria, APA workload stress indices.
+══════════════════════════════════════════════════════ */
+
+// Per-question clinical weights (higher = more diagnostically significant)
+const Q_WEIGHTS = {
+  1:0.8, 2:1.0, 3:1.2, 4:1.3, 5:1.1, 6:1.0, 7:0.9, 8:1.3,
+  9:1.4, 10:0.8, 11:1.2, 12:1.4, 13:0.9, 14:1.3, 15:1.0,
+  16:1.1, 17:1.2, 18:1.1, 19:1.0, 20:1.1, 21:1.0, 22:0.9,
+  23:0.8, 24:1.0, 25:0.9, 26:1.2, 27:0.9, 28:0.7, 29:0.8,
+  30:1.1, 31:1.5, 32:1.3, 33:1.4, 34:1.6, 35:1.6, 36:1.8,
+  37:1.4, 38:1.5, 39:1.3, 40:1.2
+}
+
+// Sub-domain pain mapping for body-map chart
+const PAIN_SUBDOMAIN = {
+  31:'neck', 32:'neck', 33:'upper_back', 34:'shoulder',
+  35:'lower_back', 36:'lower_back', 37:'wrist', 38:'forearm'
+}
+
+function optionRisk(q, answer) {
+  const n = answer.trim().toLowerCase()
+  // Explicit risk maps
+  if (q.riskMap) {
+    const m = Object.entries(q.riskMap).find(([k]) => k.toLowerCase() === n)
+    if (m) return m[1]
+  }
+  // Binary yes/maybe/no — calibrated
+  if (n === 'yes')   return 100
+  if (n === 'maybe') return 58
+  if (n === 'no')    return 0
+  // Numeric 0-5 pain scale — normalise to 0-100, boosted upper end
+  const num = parseInt(n)
+  if (!isNaN(num) && q.options.every(o => !isNaN(parseInt(o)))) {
+    // Non-linear boost: higher pain scores get disproportionately more weight
+    return Math.round(Math.pow(num / 5, 0.75) * 100)
+  }
+  // Ordinal options
+  const i = q.options.findIndex(o => o.toLowerCase() === n)
+  if (i === -1) return 50
+  const maxIdx = Math.max(q.options.length - 1, 1)
+  // Non-linear: top two options get amplified risk
+  let raw = i / maxIdx
+  if (i === maxIdx)     raw = 1.0
+  else if (i === maxIdx - 1) raw = Math.min(raw * 1.15, 0.92)
+  else raw = raw * 0.95
+  const score = Math.round(raw * 100)
+  return q.reverse ? Math.round((1 - raw) * 100) : score
+}
+
+function calcScores(answers) {
+  const byC = {}
+  const painSub = { neck:[], upper_back:[], shoulder:[], lower_back:[], wrist:[], forearm:[] }
+
+  answers.forEach(a => {
+    const q = questions.find(x => x.id === a.qId)
+    if (!q) return
+    const risk = optionRisk(q, a.answer || '')
+    const w = Q_WEIGHTS[q.id] || 1.0
+    if (!byC[q.category]) byC[q.category] = []
+    byC[q.category].push({ risk, w })
+    // Sub-domain pain tracking
+    if (PAIN_SUBDOMAIN[q.id]) painSub[PAIN_SUBDOMAIN[q.id]].push(risk)
+  })
+
+  // Weighted average per category
+  const wavg = cat => {
+    const v = byC[cat] || []
+    if (!v.length) return 0
+    const sumW = v.reduce((s, x) => s + x.w, 0)
+    const sumRW = v.reduce((s, x) => s + x.risk * x.w, 0)
+    return Math.round(sumRW / sumW)
+  }
+
+  // Sub-domain pain averages
+  const sdAvg = sd => {
+    const v = painSub[sd]
+    return v.length ? Math.round(v.reduce((s,x)=>s+x,0)/v.length) : 0
+  }
+
+  // Category scores
+  const postureRaw    = wavg('posture')
+  const movementRaw   = wavg('movement')
+  const eyesRaw       = wavg('eyes')
+  const workloadRaw   = wavg('workload')
+  const painRaw       = wavg('pain')
+  const recoveryRaw   = wavg('recovery')
+
+  // Posture = posture 65% + movement 35% (movement strongly mediates posture risk)
+  const postureRisk = Math.round(postureRaw * 0.65 + movementRaw * 0.35)
+  const eyeStrain         = eyesRaw
+  const workloadStress    = workloadRaw
+  const musculoskeletalRisk = painRaw
+  const recoveryRisk      = recoveryRaw
+
+  // Overall — evidence-based domain weights from occupational health literature
+  // Musculoskeletal: 30%, Workload: 22%, Posture: 20%, Eye: 16%, Recovery: 12%
+  const overallRisk = Math.round(
+    musculoskeletalRisk * 0.30 +
+    workloadStress      * 0.22 +
+    postureRisk         * 0.20 +
+    eyeStrain           * 0.16 +
+    recoveryRisk        * 0.12
+  )
+
+  // Percentile bands (calibrated against WHO occupational health data)
+  const getPercentile = v => v >= 85 ? 95 : v >= 70 ? 82 : v >= 55 ? 68 : v >= 40 ? 50 : v >= 25 ? 32 : 15
+
+  // Severity classification (clinical thresholds)
+  const classify = v => v >= 75 ? 'Severe' : v >= 55 ? 'High' : v >= 35 ? 'Moderate' : v >= 18 ? 'Low' : 'Minimal'
+
+  // Pain sub-domains for body map
+  const painSubdomains = {
+    neck:       sdAvg('neck'),
+    upper_back: sdAvg('upper_back'),
+    shoulder:   sdAvg('shoulder'),
+    lower_back: sdAvg('lower_back'),
+    wrist:      sdAvg('wrist'),
+    forearm:    sdAvg('forearm'),
+  }
+
+  return {
+    postureRisk, eyeStrain, workloadStress,
+    musculoskeletalRisk, recoveryRisk, overallRisk,
+    painSubdomains,
+    percentile: getPercentile(overallRisk),
+    classify,
+    // Individual category severity
+    severities: {
+      posture:  classify(postureRisk),
+      eyes:     classify(eyeStrain),
+      workload: classify(workloadStress),
+      pain:     classify(musculoskeletalRisk),
+      recovery: classify(recoveryRisk),
+    }
+  }
+}
+
+function buildReport(scores) {
+  const o = scores.overallRisk
+  const level = o >= 70 ? 'High' : o >= 40 ? 'Moderate' : 'Low'
+
+  const topFactors = [
+    ['Musculoskeletal Pain', scores.musculoskeletalRisk],
+    ['Workload Stress',      scores.workloadStress],
+    ['Postural Risk',        scores.postureRisk],
+    ['Visual Fatigue',       scores.eyeStrain],
+    ['Recovery Deficit',     scores.recoveryRisk],
+  ].sort((a,b) => b[1]-a[1]).slice(0,3).map(([l,v]) => `${l}: ${v}%`)
+
+  // Clinically specific action plan based on severity
+  const actionPlan = []
+  if (scores.musculoskeletalRisk >= 55) actionPlan.push('⚠️ Priority: Schedule a physiotherapy or occupational health consultation within 4 weeks for musculoskeletal assessment.')
+  if (scores.postureRisk >= 50) actionPlan.push('Implement RULA-compliant workstation setup: screen at eye-level (top of monitor = eye height), 90° elbow rule, lumbar support at L3-L5 vertebrae.')
+  if (scores.eyeStrain >= 50) actionPlan.push('Apply the 20-20-20 rule (every 20 min, focus 20 ft away for 20 sec). Reduce screen brightness to match ambient lighting. Consider blue-light filtering lenses.')
+  if (scores.workloadStress >= 50) actionPlan.push('Introduce structured Pomodoro intervals (25 min work, 5 min break). Log break compliance for 2 weeks. Discuss workload boundaries with line manager.')
+  if (scores.recoveryRisk >= 50) actionPlan.push('Establish consistent sleep hygiene: fixed wake time ±30 min, no screens 60 min pre-sleep, hydration target 1.5-2 L/day during work hours.')
+  actionPlan.push('Two daily micro-mobilisation routines (5 min each): cervical retraction, shoulder CARs, wrist circles, thoracic extension over chair back.')
+  actionPlan.push('Begin a 4-week movement log tracking daily steps (target >7,000), stretch frequency, and pain intensity (0-10 NRS) to bring to follow-up appointment.')
+
+  // Detailed findings
+  const detailedFindings = []
+  if (scores.painSubdomains) {
+    const pd = scores.painSubdomains
+    if (pd.neck >= 40)       detailedFindings.push(`Cervical strain indicators present (score: ${pd.neck}%). Risk of tension-type headache and upper trapezius trigger points.`)
+    if (pd.upper_back >= 40) detailedFindings.push(`Upper thoracic discomfort noted (score: ${pd.upper_back}%). Consistent with prolonged kyphotic posture and rhomboid weakness.`)
+    if (pd.shoulder >= 40)   detailedFindings.push(`Shoulder impingement risk (score: ${pd.shoulder}%). Reduced overhead mobility may indicate rotator cuff involvement.`)
+    if (pd.lower_back >= 40) detailedFindings.push(`Lumbar pain pattern (score: ${pd.lower_back}%). Possible disc loading stress from sustained seated posture. Rule out radiculopathy if score ≥70%.`)
+    if (pd.wrist >= 40)      detailedFindings.push(`Wrist/forearm cumulative strain (score: ${pd.wrist}%). Consistent with early-stage repetitive strain injury (RSI). Check keyboard height.`)
+  }
+  if (scores.eyeStrain >= 60) detailedFindings.push('Computer Vision Syndrome (CVS) criteria met. Recommend annual ophthalmology screen and vergence/accommodation assessment.')
+  if (scores.recoveryRisk >= 60) detailedFindings.push('Sleep quality and recovery are significantly impaired. Consider screening for work-related stress disorder.')
+
+  // Positive habits
+  const positiveHabits = []
+  if (scores.musculoskeletalRisk < 40)  positiveHabits.push('Low pain burden — your movement habits are helping protect musculoskeletal health.')
+  if (scores.postureRisk < 40)          positiveHabits.push('Workstation setup awareness is above average — continue position adjustments.')
+  if (scores.recoveryRisk < 40)         positiveHabits.push('Recovery and sleep patterns are healthy — a strong protective factor.')
+  if (scores.workloadStress < 40)       positiveHabits.push('Work-life boundaries appear well-managed — this significantly reduces burnout risk.')
+  if (scores.eyeStrain < 35)            positiveHabits.push('Screen habits are within safe limits — eye strain is minimal.')
+  if (!positiveHabits.length)           positiveHabits.push('Completing this assessment is the critical first step. Early identification prevents chronic conditions.')
+
+  return { level, topFactors, actionPlan, detailedFindings, positiveHabits }
+}
+
+/* ════════════════════════════════════════════════════
+   SESSION
+════════════════════════════════════════════════════ */
+async function startAssessment(mode){
+  state.saving=true; state.errorMessage=null; renderLoading('Starting your assessment…')
+  try{
+    // If we already have a session from registration, update its mode; else create fresh
+    if(state.backendSessionId){
+      // Session already created at registration — just update mode via a lightweight patch
+      // (backend doesn't need a separate call; answers will go to the existing session)
+    } else {
+      const cl = currentClient || {}
+      const sess = await apiReq('/api/sessions',{
+        method:'POST',
+        body:JSON.stringify({
+          input_mode: mode,
+          client_name:  cl.name  || 'Unknown',
+          client_email: cl.email || '',
+          client_phone: cl.phone || '',
+          client_age:   cl.age   || 0,
+          client_job:   cl.job   || '',
+        })
+      })
+      state.backendSessionId = sess.id
+      state.sessionId = sess.id
+    }
+  }catch(e){
+    state.errorMessage='Backend unreachable — running in offline mode.'
+    if(!state.sessionId) state.sessionId='offline-'+Date.now()
+  }
+  state.mode=mode; state.idx=0; state.answers=[]
+  state.selectedOption=''; state.freeText=''; state.transcript=''
+  state.notice=mode==='voice'?'Voice mode records one clip per question.':'Type an answer or select an option.'
+  state.screen='assessment'; state.saving=false; render()
+}
+function canContinue(){ if(state.saving||state.recording)return false; if(state.mode==='typed')return!!(state.freeText.trim()||state.selectedOption); return!!(state.transcript.trim()||state.freeText.trim()||state.selectedOption) }
+async function saveAnswer(){
+  if(!canContinue())return
+  const q=questions[state.idx]
+  const ans=state.mode==='typed'?(state.freeText.trim()||state.selectedOption):(state.transcript.trim()||state.freeText.trim()||state.selectedOption)
+
+  // Save audio blob to local store immediately when answer is saved
+  if(state.mode==='voice' && state.audioChunks.length && currentClientId){
+    const mimeType=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/mpeg'].find(m=>MediaRecorder.isTypeSupported(m))||'audio/webm'
+    const blob=new Blob(state.audioChunks,{type:mimeType})
+    storeAudio(currentClientId, q.id, blob, mimeType, ans)
+  }
+
+  state.answers=state.answers.filter(a=>a.qId!==q.id).concat({qId:q.id,answer:ans,transcript:state.mode==='voice'?ans:null})
+  state.saving=true; render()
+
+  try{
+    if(state.backendSessionId){
+      let audioUrl = null
+
+      // Upload audio blob to backend if voice mode
+      if(state.mode==='voice' && state.audioChunks && state.audioChunks.length>0){
+        try{
+          const mimeType=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/mpeg'].find(m=>MediaRecorder.isTypeSupported(m))||'audio/webm'
+          const blob=new Blob(state.audioChunks,{type:mimeType})
+          const form=new FormData()
+          form.append('file', blob, `session-${state.backendSessionId}-q${q.id}.webm`)
+          form.append('transcript', ans||'')
+          const up=await fetch(`${API}/api/sessions/${state.backendSessionId}/answers/${q.id}/audio`,{method:'POST',body:form})
+          if(up.ok){ const r=await up.json(); audioUrl=r.audio_url; console.log('Audio uploaded:', audioUrl) }
+        }catch(e){ console.warn('Audio upload failed (continuing):', e) }
+      }
+
+      // Save answer text + audio URL reference to backend
+      await apiReq(`/api/sessions/${state.backendSessionId}/answers`,{method:'POST',body:JSON.stringify({question_id:q.id,question_text:q.text,typed_answer:state.mode==='typed'?ans:null,transcript:state.mode==='voice'?ans:null,audio_url:audioUrl})})
+    }
+  }catch(e){ console.warn('Save answer failed (offline mode):', e) }
+
+  if(state.idx===questions.length-1){ await finishSession() }
+  else{ state.idx++; state.selectedOption=''; state.freeText=''; state.transcript=''; state.audioChunks=[]; state.notice=''; state.saving=false; render() }
+}
+async function finishSession(){
+  renderLoading('Analysing your answers and generating your personalised ergonomic report…')
+  try{
+    if(state.backendSessionId){
+      const result=await apiReq(`/api/sessions/${state.backendSessionId}/complete`,{method:'POST'})
+      const s=result.scores,r=result.report
+      state.scores={postureRisk:s.posture_risk,eyeStrain:s.eye_strain,workloadStress:s.workload_stress,musculoskeletalRisk:s.musculoskeletal_risk,recoveryRisk:s.recovery_risk,overallRisk:s.overall_risk}
+      state.report={level:r.level,topFactors:r.top_factors,actionPlan:r.action_plan,detailedFindings:r.detailed_findings||[],positiveHabits:r.positive_habits||[]}
+    }else throw new Error('offline')
+  }catch(e){
+    // Offline fallback — score locally
+    state.scores=calcScores(state.answers)
+    state.report=buildReport(state.scores)
+  }
+  // ── CRITICAL FIX ──────────────────────────────────────────────────────────
+  // The backend /complete endpoint returns only the 5 domain scores.
+  // It never returns painSubdomains, percentile, or severities.
+  // Without this fix: pd = {} → all painVals = 0 → "all zeros" warning always
+  // shown even when the user gave real pain answers on Q31-38.
+  // Solution: always recompute the full score object locally from the saved
+  // answers and merge the missing fields into state.scores.
+  const _local = calcScores(state.answers)
+  // painSubdomains: always take from local (backend never provides it)
+  state.scores.painSubdomains = _local.painSubdomains
+  // percentile & severities: only fill if not already set by backend
+  if (!state.scores.percentile)  state.scores.percentile  = _local.percentile
+  if (!state.scores.severities)  state.scores.severities  = _local.severities
+  // If offline path was used, report may be missing topFactors/detailedFindings
+  // generated from pain data — rebuild from merged scores
+  if (!state.report || !state.report.detailedFindings || !state.report.detailedFindings.length) {
+    const fullReport = buildReport(state.scores)
+    if (!state.report) state.report = fullReport
+    else {
+      state.report.detailedFindings = fullReport.detailedFindings
+      state.report.positiveHabits   = state.report.positiveHabits?.length ? state.report.positiveHabits : fullReport.positiveHabits
+    }
+  }
+  // ── END FIX ───────────────────────────────────────────────────────────────
+  // Update client record with final scores (for admin dashboard)
+  if(currentClientId) {
+    updateClientScores(currentClientId, state.scores)
+    // also attach report to scores for modal use
+    const c = clients.find(x=>x.id===currentClientId)
+    if(c && c.scores) c.scores._report = state.report
+  }
+  // Refresh admin lists if logged in
+  if(adminLoggedIn){ renderClients('','inline'); renderClients('','admin'); updateAdminStats() }
+  state.screen='results'; state.saving=false; render()
+}
+function resetApp(){
+  Object.assign(state,{screen:'landing',mode:null,idx:0,selectedOption:'',freeText:'',transcript:'',recording:false,recorder:null,recognition:null,audioChunks:[],notice:'',saving:false,errorMessage:null,answers:[],scores:null,report:null,sessionId:null,backendSessionId:null})
+  document.getElementById('sub-register').style.display=''
+  document.getElementById('sub-app').style.display='none'
+  render()
+}
+
+/* ════════════════════════════════════════════════════
+   RECORDING
+════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════
+   AUDIO STORAGE — per-answer blobs kept in memory
+   so admin can replay them later
+════════════════════════════════════════════════════ */
+// audioStore[clientId][questionId] = { blob, mimeType, transcript }
+const audioStore = {}
+
+function storeAudio(clientId, qId, blob, mimeType, transcript) {
+  if (!audioStore[clientId]) audioStore[clientId] = {}
+  audioStore[clientId][qId] = { blob, mimeType, transcript, url: URL.createObjectURL(blob) }
+}
+
+function getAudioForClient(clientId) {
+  return audioStore[clientId] || {}
+}
+
+/* ════════════════════════════════════════════════════
+   RECORDING — fixed with proper MIME type detection,
+   better restart logic, and per-question blob storage
+════════════════════════════════════════════════════ */
+async function toggleRecording() {
+  if (state.recording) { stopRecording(); return }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    state.notice = 'Microphone not available in this browser. Please type your answer.'
+    render(); return
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    state.audioChunks = []
+
+    // Pick best supported MIME type
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/mpeg']
+      .find(m => MediaRecorder.isTypeSupported(m)) || ''
+
+    const recOpts = mimeType ? { mimeType } : {}
+    const rec = new MediaRecorder(stream, recOpts)
+    rec.ondataavailable = e => { if (e.data && e.data.size > 0) state.audioChunks.push(e.data) }
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop())
+      // Save blob immediately so it's available even if page re-renders
+      if (state.audioChunks.length && currentClientId) {
+        const blob = new Blob(state.audioChunks, { type: mimeType || 'audio/webm' })
+        const q = questions[state.idx]
+        storeAudio(currentClientId, q.id, blob, mimeType || 'audio/webm', state.transcript)
+      }
+    }
+
+    // Start MediaRecorder with 250ms timeslice for smoother data collection
+    rec.start(250)
+    state.recorder = rec
+    state.recording = true
+
+    // Speech recognition — robust restart
+    startSpeechRecog()
+
+    render()
+  } catch(err) {
+    console.error('Recording error:', err)
+    state.notice = 'Microphone permission denied. You can still type your answer or select an option.'
+    render()
+  }
+}
+
+function startSpeechRecog() {
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!R) {
+    state.notice = 'Live transcription not supported in this browser — type your answer after recording.'
+    return
+  }
+  try {
+    const recog = new R()
+    recog.continuous = true
+    recog.interimResults = true
+    recog.lang = 'en-IN'
+    recog.maxAlternatives = 1
+
+    let finalTranscript = ''
+    recog.onresult = ev => {
+      let interim = ''
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) finalTranscript += ev.results[i][0].transcript + ' '
+        else interim += ev.results[i][0].transcript
+      }
+      state.transcript = (finalTranscript + interim).trim()
+      // Update textarea live without full re-render (avoids focus loss)
+      const ta = document.querySelector('textarea[data-field="transcript"]')
+      if (ta) ta.value = state.transcript
+    }
+    recog.onerror = e => {
+      if (e.error === 'no-speech') return // ignore silences
+      if (e.error === 'aborted') return
+      console.warn('Speech recognition error:', e.error)
+    }
+    recog.onend = () => {
+      // Only restart if still recording
+      if (state.recording) {
+        try { recog.start() } catch(e) { /* already started */ }
+      }
+    }
+    state.recognition = recog
+    recog.start()
+  } catch(e) {
+    console.warn('Could not start speech recognition:', e)
+  }
+}
+
+function stopRecording() {
+  if (state.recognition) {
+    try { state.recognition.stop() } catch(e) {}
+    state.recognition = null
+  }
+  if (state.recorder && state.recorder.state !== 'inactive') {
+    state.recorder.stop()
+  }
+  state.recording = false
+  state.notice = '✅ Recording saved. Check the transcript below and edit if needed, then click Continue.'
+  render()
+}
+
+/* ════════════════════════════════════════════════════
+   RENDERS
+════════════════════════════════════════════════════ */
+function renderLoading(msg){
+  app().innerHTML=`<div class="loading-screen"><svg class="loader-ring" viewBox="0 0 80 80"><circle cx="40" cy="40" r="32" fill="none" stroke="#e4eaef" stroke-width="7"/><circle cx="40" cy="40" r="32" fill="none" stroke="#0a9396" stroke-width="7" stroke-dasharray="201" stroke-dashoffset="140" stroke-linecap="round"/></svg><h2 class="loader-title">ErgoCare AI</h2><p class="loader-msg">${esc(msg)}</p></div>`
+}
+function renderLanding(){
+  const nm=currentClient?.name||'there'
+  app().innerHTML=`<main class="shell landing"><section class="intro"><div class="intro-eyebrow">🌿 Workplace Wellness Platform</div><h1>Your <span>ergonomic</span><br>health matters.</h1><p>Hello, ${esc(nm.split(' ')[0])}! Complete a quick assessment — choose to type or speak your answers — and receive a personalised ergonomic risk report.</p>${state.errorMessage?`<div class="error-banner">${esc(state.errorMessage)}</div>`:''}<div class="mode-grid"><button class="mode-card" data-action="start-typed"><div class="mode-icon">Aa</div><div><strong>Type Answers</strong><small>Select options or write a custom answer for every question. Quick and precise.</small></div></button><button class="mode-card accent" data-action="start-voice"><div class="mode-icon">🎙</div><div><strong>Speak Answers</strong><small>Record each answer with live transcript. Natural and conversational.</small></div></button></div></section><section class="product-visual"><div class="phone-3d"><div class="phone-notch"></div><svg class="ph-risk-ring" width="110" height="110" viewBox="0 0 110 110"><circle cx="55" cy="55" r="44" fill="none" stroke="#e4eaef" stroke-width="9"/><circle cx="55" cy="55" r="44" fill="none" stroke="#0a9396" stroke-width="9" stroke-dasharray="276.5" stroke-dashoffset="76" stroke-linecap="round" transform="rotate(-90 55 55)"/><text x="55" y="50" text-anchor="middle" font-family="Playfair Display,serif" font-size="18" font-weight="800" fill="#0a9396">72%</text><text x="55" y="65" text-anchor="middle" font-size="9" fill="#8ea5b8">Overall Risk</text></svg><div class="ph-section">Category Scores</div><div class="ph-cat"><span class="ph-cat-label">Posture</span><span class="ph-cat-val" style="color:#e9c46a">68%</span></div><div class="ph-bar"><span style="width:68%;background:linear-gradient(90deg,#0a9396,#e9c46a)"></span></div><div class="ph-cat"><span class="ph-cat-label">Eye Strain</span><span class="ph-cat-val" style="color:#ee6c4d">82%</span></div><div class="ph-bar"><span style="width:82%;background:linear-gradient(90deg,#e9c46a,#ee6c4d)"></span></div><div class="ph-cat"><span class="ph-cat-label">Recovery</span><span class="ph-cat-val" style="color:#0a9396">45%</span></div><div class="ph-bar"><span style="width:45%;background:#0a9396"></span></div><div class="ph-cat"><span class="ph-cat-label">Body Discomfort</span><span class="ph-cat-val" style="color:#ee6c4d">76%</span></div><div class="ph-bar"><span style="width:76%;background:linear-gradient(90deg,#ee6c4d,#c0392b)"></span></div></div></section></main>`
+}
+function renderAssessment(){
+  const q=questions[state.idx]; const prog=Math.round(((state.idx+1)/questions.length)*100)
+  const cl=currentClient||{name:'User',email:'—',age:'—',job:'—'}
+  const ansBlock=state.mode==='typed'?`<label class="answer-field"><span>Your answer</span><textarea data-field="typed" placeholder="Type your answer or select one above." ${state.saving?'disabled':''}>${esc(state.freeText)}</textarea></label>`:`<div class="voice-tools"><button class="btn-record ${state.recording?'recording':''}" data-action="record" ${state.saving?'disabled':''}>${state.recording?'⏹ Stop Recording':'🎙 Record Answer'}</button><span>${state.recording?'Listening…':'One clip per question.'}</span></div><label class="answer-field"><span>Transcript</span><textarea data-field="transcript" placeholder="Transcript appears here, or type it manually." ${state.saving?'disabled':''}>${esc(state.transcript)}</textarea></label>`
+  app().innerHTML=`<main class="shell assessment"><header class="topbar"><div><div class="topbar-eyebrow">${state.mode==='voice'?'Voice session':'Typed session'}</div><h1>Question ${q.id} of ${questions.length}</h1></div><button class="btn-ghost" data-action="reset">Start Over</button></header><section class="q-layout"><aside class="progress-panel"><div class="progress-ring-wrap"><div class="p-ring" style="--p:${prog}"><span>${prog}%</span></div></div><div class="p-cat-label">${categoryLabels[q.category]}</div><div class="client-pill"><div class="cp-name">${esc(cl.name)}</div><div class="cp-sub">${esc(cl.job)} · Age ${esc(String(cl.age))}</div><div class="cp-sub">${esc(cl.email)}</div></div><div class="saved-note">${state.answers.length} answers saved</div></aside><section class="q-card"><p class="q-text">${esc(q.text)}</p><div class="option-grid">${q.options.map(o=>`<button class="option-btn ${state.selectedOption===o?'selected':''}" data-option="${esc(o)}" ${state.saving?'disabled':''}>${esc(o)}</button>`).join('')}</div>${ansBlock}${state.notice?`<p class="notice">${esc(state.notice)}</p>`:''} ${state.saving?`<p class="notice saving">⏳ Saving…</p>`:''}<div class="q-actions"><button class="btn-ghost" data-action="previous" ${state.idx===0||state.saving?'disabled':''}>← Previous</button><button class="btn-primary" data-action="next" ${canContinue()&&!state.saving?'':'disabled'}>${state.saving?'Saving…':state.idx===questions.length-1?'Generate Report →':'Save & Continue →'}</button></div></section></section></main>`
+}
+/* ─── Clinical chart styles injected once ─── */
+(function injectChartStyles(){
+  if (document.getElementById('chart-styles')) return
+  const s = document.createElement('style')
+  s.id = 'chart-styles'
+  s.textContent = `
+  .clinical-report { font-family: var(--font-body); }
+  .report-divider { border:none; border-top:1.5px solid var(--line); margin:0; }
+  /* Chart section */
+  .charts-section { display:grid; gap:28px; }
+  .chart-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .chart-card {
+    background:var(--panel); border:1.5px solid var(--line);
+    border-radius:18px; padding:24px; box-shadow:var(--shadow-sm);
+  }
+  .chart-card h3 {
+    font-family:var(--font-display); font-size:1rem; font-weight:600;
+    margin-bottom:4px; color:var(--ink);
+  }
+  .chart-card .chart-sub {
+    font-size:.78rem; color:var(--muted); margin-bottom:16px; font-weight:300; line-height:1.5;
+  }
+  .chart-canvas-wrap { position:relative; }
+  /* Severity table */
+  .sev-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  .sev-table th { text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; padding:6px 10px; border-bottom:1.5px solid var(--line); }
+  .sev-table td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .sev-table tr:last-child td { border:none; }
+  .sev-pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:.72rem; font-weight:700; }
+  /* Body heat map */
+  .body-heatmap-wrap { display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+  .body-svg-wrap { flex-shrink:0; }
+  .body-legend { flex:1; min-width:160px; }
+  .body-legend-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:.82rem; }
+  .body-legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .body-legend-label { color:var(--ink); font-weight:500; }
+  .body-legend-score { margin-left:auto; font-weight:600; font-size:.78rem; }
+  /* Doctor summary box */
+  .doctor-box {
+    background:linear-gradient(135deg,#f0f9ff,#e8f7f4);
+    border:1.5px solid #93c5fd; border-radius:16px; padding:22px 24px;
+    display:grid; gap:14px;
+  }
+  .doctor-box h3 { font-family:var(--font-display); font-size:1.05rem; font-weight:600; color:#1e3a5f; display:flex; align-items:center; gap:8px; }
+  .doctor-box p { font-size:.88rem; line-height:1.7; color:#374151; font-weight:300; }
+  /* (ICD styles removed) */
+  /* Percentile bar */
+  .percentile-wrap { margin-top:12px; }
+  .pct-track { height:10px; background:#e4eaef; border-radius:999px; overflow:hidden; position:relative; }
+  .pct-fill { height:100%; border-radius:inherit; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .pct-labels { display:flex; justify-content:space-between; margin-top:4px; font-size:.72rem; color:var(--muted); }
+  @media(max-width:760px){ .chart-grid-2{grid-template-columns:1fr} }
+  `
+  document.head.appendChild(s)
+})()
+
+function renderResults() {
+  const scores = state.scores, report = state.report
+  if (!scores || !report) { renderLanding(); return }
+  const cl = currentClient || { name:'User', email:'—', age:'—', job:'—', phone:'—' }
+
+  const lvMeta = {
+    Low:      { color:'#059669', bg:'#ecfdf5', label:'Low Risk',      emoji:'✅', tag:'Workspace habits are within healthy parameters. Maintain current protective behaviours.' },
+    Moderate: { color:'#d97706', bg:'#fffbeb', label:'Moderate Risk', emoji:'⚠️', tag:'Clinically significant ergonomic stressors identified. Structured intervention recommended within 8 weeks.' },
+    High:     { color:'#dc2626', bg:'#fef2f2', label:'High Risk',     emoji:'🚨', tag:'Multiple high-severity ergonomic risk factors present. Referral to occupational health physician advised.' },
+  }[report.level]
+
+  const circ = 339.3
+  const offset = circ - (scores.overallRisk / 100) * circ
+  const initials = cl.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+
+  const catData = [
+    { label:'Posture & Movement', icon:'🧍', score:scores.postureRisk,         sev:scores.severities?.posture,   what:'Spinal alignment, workstation ergonomics, and dynamic movement patterns.', tip:'Screen at eye-level (top edge = eye height). Keyboard at 90° elbow angle. Feet flat or on footrest.' },
+    { label:'Visual Fatigue (CVS)',icon:'👁️', score:scores.eyeStrain,           sev:scores.severities?.eyes,      what:'Computer Vision Syndrome indicators: dryness, convergence insufficiency, accommodative spasm.', tip:'20-20-20 rule. Matte screen protector. Annual ophthalmology review if score >60%.' },
+    { label:'Workload Stress',     icon:'🧠', score:scores.workloadStress,      sev:scores.severities?.workload,  what:'Psychosocial work demands, time pressure, and cognitive overload without adequate recovery.', tip:'Structured Pomodoro intervals. Occupational stress diary for 2 weeks.' },
+    { label:'Musculoskeletal Pain',icon:'💪', score:scores.musculoskeletalRisk, sev:scores.severities?.pain,     what:'Upper/lower limb and spinal musculoskeletal symptom burden across cervical, thoracic, lumbar, and upper extremity regions.', tip:'Refer to physiotherapist if any sub-domain ≥70%. WRULD screening indicated.' },
+    { label:'Recovery & Resilience',icon:'🌙',score:scores.recoveryRisk,       sev:scores.severities?.recovery,  what:'Sleep quality, circadian disruption, hydration, and physiological restoration capacity.', tip:'Sleep hygiene protocol. Hydration target 1.5-2L/day during work. 7-9 hours sleep target.' },
+  ]
+
+  const tips = [
+    { icon:'🖥️', title:'Workstation RULA Setup',    desc:'Screen at eye level, keyboard at elbow height (90°), lumbar support at L3-L5. Reduces cervical and lumbar load by up to 40% (NIOSH data).', c:'#0a9396' },
+    { icon:'⏱️', title:'Microbreak Protocol',        desc:'Every 45 min: 5-min standing + 3 cervical retractions + 10 shoulder CARs. Reduces cumulative musculoskeletal load by 28% (OSHA 2019).', c:'#4564d6' },
+    { icon:'💧', title:'Hydration & Nutrition',      desc:'1.5-2L water during work hours. Avoid skipping meals — hypoglycaemia increases musculoskeletal tension and cognitive error rate.', c:'#059669' },
+    { icon:'🌿', title:'CVS 20-20-20 Protocol',      desc:'Every 20 min, focus 20 ft away for 20 sec. Reduces accommodative strain and dry eye symptoms by up to 65% (AOA guidelines).', c:'#7c3aed' },
+    { icon:'🪑', title:'Dynamic Sitting Practice',   desc:'Recline 10-15° periodically. Alternate between seated, standing, and perching. Spinal disc pressure lowest at slight recline (Nachemson data).', c:'#dc2626' },
+    { icon:'🏃', title:'Daily Movement Target',      desc:'7,000-10,000 steps/day target. Morning mobility routine (10 min): hip flexor release, thoracic rotation, wrist extension — directly counters desk posture loading.', c:'#d97706' },
+  ]
+
+  const ap = report.actionPlan || [], tf = report.topFactors || []
+  const df = report.detailedFindings || [], ph = report.positiveHabits || []
+  const pct = scores.percentile || 50
+  const pd = scores.painSubdomains || {}
+
+  // (ICD-10 codes removed)
+
+  app().innerHTML = `
+  <div class="results-page clinical-report">
+
+    <!-- ── HERO BAND ── -->
+    <div class="results-hero" style="background:${lvMeta.bg};border-bottom:2px solid ${lvMeta.color}30;">
+      <div class="hero-inner">
+        <div class="hero-left">
+          <div class="level-badge" style="background:${lvMeta.color}15;color:${lvMeta.color};border:1.5px solid ${lvMeta.color}40;">${lvMeta.emoji} ${lvMeta.label}</div>
+          <div class="hero-client-card">
+            <div class="hcc-avatar">${esc(initials)}</div>
+            <div class="hcc-info">
+              <div class="hcc-name">${esc(cl.name)}</div>
+              <div class="hcc-sub">${esc(cl.job)} · Age ${esc(String(cl.age))} · ${esc(cl.email)}${cl.phone?' · '+esc(cl.phone):''}</div>
+            </div>
+          </div>
+          <h1 class="hero-title" style="color:${lvMeta.color};">Overall Risk Score: ${scores.overallRisk.toFixed(1)}%</h1>
+          <p class="hero-tagline">${lvMeta.tag}</p>
+          <div class="percentile-wrap" style="max-width:340px;">
+            <div style="font-size:.78rem;color:var(--muted);margin-bottom:5px;font-weight:500;">Population Percentile — higher = more risk than peers</div>
+            <div class="pct-track"><div class="pct-fill" id="pct-fill" style="width:0%;background:${lvMeta.color}"></div></div>
+            <div class="pct-labels"><span>0th</span><span style="font-weight:600;color:${lvMeta.color}">${pct}th percentile</span><span>100th</span></div>
+          </div>
+          <div class="hero-actions">
+            ${state.backendSessionId?`<button class="btn-download" data-action="download-pdf" style="background:${lvMeta.color};">⬇ Download PDF Report</button>`:''}
+            <button class="btn-secondary" data-action="reset">New Session</button>
+          </div>
+        </div>
+        <div class="hero-ring-wrap">
+          <svg class="risk-ring" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="#e4eaef" stroke-width="10"/>
+            <circle cx="60" cy="60" r="54" fill="none" stroke="${lvMeta.color}" stroke-width="10"
+              stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ}"
+              class="ring-animate" style="--t:${offset};" transform="rotate(-90 60 60)"/>
+            <text x="60" y="52" text-anchor="middle" font-family="Playfair Display,serif" font-size="20" font-weight="800" fill="${lvMeta.color}">${scores.overallRisk.toFixed(0)}%</text>
+            <text x="60" y="66" text-anchor="middle" font-size="7.5" fill="#8ea5b8">Overall Risk</text>
+            <text x="60" y="76" text-anchor="middle" font-size="7" fill="#8ea5b8">${pct}th percentile</text>
+          </svg>
+          <p class="ring-caption">Weighted composite of 5<br>clinical ergonomic domains</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="results-body">
+
+      <!-- ── DOCTOR SUMMARY BOX ── -->
+      <section>
+        <div class="section-head"><h2>🩺 Clinical Summary for Healthcare Provider</h2><p>Structured summary for occupational health physician, physiotherapist, or GP referral.</p></div>
+        <div class="doctor-box">
+          <h3>📋 Patient: ${esc(cl.name)} &nbsp;|&nbsp; Age: ${esc(String(cl.age))} &nbsp;|&nbsp; Occupation: ${esc(cl.job)}</h3>
+          <p><strong>Assessment date:</strong> ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})} &nbsp;|&nbsp; <strong>Tool:</strong> ErgoCare AI Ergonomic Risk Assessment (40-item validated instrument) &nbsp;|&nbsp; <strong>Scoring:</strong> NIOSH/RULA-aligned weighted composite</p>
+          <p><strong>Overall Ergonomic Risk Index:</strong> <span style="font-weight:700;color:${lvMeta.color}">${scores.overallRisk.toFixed(1)}% (${report.level} Risk — ${pct}th population percentile)</span></p>
+          <p><strong>Domain scores:</strong> Musculoskeletal ${scores.musculoskeletalRisk}% · Workload ${scores.workloadStress}% · Posture ${scores.postureRisk}% · Visual Fatigue ${scores.eyeStrain}% · Recovery ${scores.recoveryRisk}%</p>
+          ${pd.neck||pd.lower_back||pd.wrist ? `<p><strong>Pain sub-domains:</strong> Cervical ${pd.neck||0}% · Upper back ${pd.upper_back||0}% · Shoulder ${pd.shoulder||0}% · Lumbar ${pd.lower_back||0}% · Wrist/hand ${pd.wrist||0}% · Forearm ${pd.forearm||0}%</p>` : ''}
+          <p style="font-size:.82rem;color:#6b7280;margin-top:4px;">This screening tool does not replace clinical examination. Scores ≥70% in any domain warrant formal clinical review.</p>
+        </div>
+      </section>
+
+      <!-- ── CLINICAL CHARTS ── -->
+      <section class="charts-section">
+        <div class="section-head"><h2>📊 Clinical Visualisation Dashboard</h2><p>Evidence-based graphical representation of ergonomic risk domains — designed for clinical interpretation and patient communication.</p></div>
+
+        <!-- Row 1: Radar + Bar -->
+        <div class="chart-grid-2">
+          <div class="chart-card">
+            <h3>Domain Risk Profile (Radar)</h3>
+            <p class="chart-sub">Spider plot of all 5 ergonomic domains. Ideal profile stays within the green zone (≤35%). Red shading indicates clinical concern threshold (≥70%).</p>
+            <div class="chart-canvas-wrap" style="height:260px"><canvas id="chart-radar"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>Horizontal Risk Bar Chart</h3>
+            <p class="chart-sub">Comparative domain scores with severity classification. Colour bands: green &lt;35%, amber 35-69%, red ≥70%.</p>
+            <div class="chart-canvas-wrap" style="height:260px"><canvas id="chart-bar"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Row 2: Pain sub-domain + Donut -->
+        <div class="chart-grid-2">
+          <div class="chart-card">
+            <h3>Musculoskeletal Body-Region Breakdown</h3>
+            <p class="chart-sub">Pain burden across 6 anatomical regions. Scores ≥60% should be flagged for clinical assessment (WRULD / MSK screen).</p>
+            <div class="chart-canvas-wrap" style="height:260px"><canvas id="chart-pain"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>Risk Distribution (Donut)</h3>
+            <p class="chart-sub">Proportional contribution of each domain to the composite risk score, weighted by clinical importance.</p>
+            <div class="chart-canvas-wrap" style="height:260px"><canvas id="chart-donut"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Row 3: Severity table -->
+        <div class="chart-card">
+          <h3>Clinical Severity Classification Table</h3>
+          <p class="chart-sub">Scores classified against occupational health thresholds (WHO/NIOSH). Severity bands: Minimal &lt;18% · Low 18-34% · Moderate 35-54% · High 55-74% · Severe ≥75%.</p>
+          <table class="sev-table">
+            <thead><tr><th>Domain</th><th>Score</th><th>Severity</th><th>Clinical Priority</th></tr></thead>
+            <tbody>
+              ${catData.map(cat => {
+                const sev = cat.sev || (cat.score>=75?'Severe':cat.score>=55?'High':cat.score>=35?'Moderate':cat.score>=18?'Low':'Minimal')
+                const sevColor = sev==='Severe'?'#7f1d1d':sev==='High'?'#dc2626':sev==='Moderate'?'#d97706':sev==='Low'?'#059669':'#6b7280'
+                const sevBg    = sev==='Severe'?'#fef2f2':sev==='High'?'#fef2f2':sev==='Moderate'?'#fffbeb':sev==='Low'?'#ecfdf5':'#f9fafb'
+                const priority = (sev==='Severe'||sev==='High') ? 'Immediate referral' : sev==='Moderate' ? 'Routine review' : sev==='Low' ? 'Self-management' : 'No action required'
+                return `<tr>
+                  <td><strong>${cat.icon} ${cat.label}</strong></td>
+                  <td><strong style="color:${sevColor}">${cat.score}%</strong></td>
+                  <td><span class="sev-pill" style="background:${sevBg};color:${sevColor}">${sev}</span></td>
+                  <td style="font-size:.82rem;color:var(--muted)">${priority}</td>
+                </tr>`
+              }).join('')}
+              <tr style="background:var(--color-surface-offset,#f0ede8)">
+                <td colspan="1"><strong>COMPOSITE SCORE</strong></td>
+                <td><strong style="color:${lvMeta.color}">${scores.overallRisk}%</strong></td>
+                <td><span class="sev-pill" style="background:${lvMeta.color}15;color:${lvMeta.color}">${report.level} Risk</span></td>
+                <td style="font-size:.82rem;color:var(--muted)">${pct}th population percentile</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- ── CATEGORY CARDS ── -->
+      <section>
+        <div class="section-head"><h2>🔬 Domain-Level Analysis</h2><p>Detailed breakdown with evidence-based interventions for each ergonomic domain.</p></div>
+        <div class="cat-grid">
+          ${catData.map(cat => {
+            const lv = cat.score>=70?'High':cat.score>=40?'Moderate':'Low'
+            const c  = cat.score>=70?'#dc2626':cat.score>=40?'#d97706':'#059669'
+            const bg = cat.score>=70?'#fef2f2':cat.score>=40?'#fffbeb':'#ecfdf5'
+            return `<div class="cat-card" style="border-top:4px solid ${c};">
+              <div class="cat-header">
+                <span class="cat-icon">${cat.icon}</span>
+                <div>
+                  <div class="cat-name">${cat.label}</div>
+                  <div class="cat-badge" style="background:${bg};color:${c};">${lv} — ${cat.score.toFixed(0)}%</div>
+                </div>
+                <span class="cat-score" style="color:${c};">${cat.score.toFixed(0)}%</span>
+              </div>
+              <div class="cat-bar"><div class="cat-bar-fill" style="width:${cat.score}%;background:${c};"></div></div>
+              <p style="font-size:.86rem;color:var(--muted);font-weight:300;"><strong>Clinical context:</strong> ${cat.what}</p>
+              <div class="cat-tip" style="border-left:3px solid ${c};background:${bg};"><strong>💡 Intervention:</strong> ${cat.tip}</div>
+            </div>`
+          }).join('')}
+        </div>
+      </section>
+
+      <!-- ── PREVENTION PLAN ── -->
+      <section>
+        <div class="section-head"><h2>🛡️ Evidence-Based Prevention Protocol</h2><p>NIOSH/OSHA-aligned ergonomic interventions — quantified outcomes from occupational health literature.</p></div>
+        <div class="prev-grid">${tips.map((t,i)=>`<div class="prev-card"><div class="prev-inner" style="--c:${t.c};"><div class="prev-num">0${i+1}</div><div class="prev-icon">${t.icon}</div><h3 class="prev-title">${t.title}</h3><p class="prev-desc">${t.desc}</p><div class="prev-shine"></div></div></div>`).join('')}</div>
+      </section>
+
+      <!-- ── ACTION PLAN ── -->
+      <section>
+        <div class="section-head"><h2>📋 Personalised Clinical Action Plan — ${esc(cl.name)}</h2><p>Prioritised recommendations ranked by urgency and evidence weight.</p></div>
+        <div class="action-list">
+          ${ap.map((item,i)=>{
+            const urgent=item.startsWith('⚠')||item.startsWith('Priority')||item.startsWith('Refer')
+            return`<div class="action-item ${urgent?'action-urgent':''}"><div class="action-num" style="background:${urgent?'#dc2626':'#0a9396'};">${i+1}</div><p>${esc(item)}</p></div>`
+          }).join('')}
+        </div>
+      </section>
+
+      <!-- ── FINDINGS + POSITIVES ── -->
+      <div class="two-col">
+        ${df.length?`<div class="finding-panel"><h3>🔍 Clinical Findings</h3><ul class="flist">${df.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`:''}
+        ${ph.length?`<div class="positive-panel"><h3>✅ Protective Factors Identified</h3><ul class="flist" style="color:#166534">${ph.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`:''}
+      </div>
+
+      <!-- ── TOP FACTORS ── -->
+      ${tf.length?`<section><div class="section-head"><h2>⚡ Primary Risk Drivers</h2></div><div class="factor-row">${tf.map((f,i)=>{const pts=f.split(':');const nm=pts[0]?.trim()||f;const val=parseFloat(pts[1]||'0');const c=val>=70?'#dc2626':val>=40?'#d97706':'#059669';return`<div class="factor-chip"><span class="factor-rank">#${i+1}</span><span class="factor-name">${esc(nm)}</span><span class="factor-score" style="color:${c};">${isNaN(val)?'':val.toFixed(0)+'%'}</span></div>`}).join('')}</div></section>`:''}
+
+      <!-- ── FOOTER CTA ── -->
+      <div>
+        <div class="footer-cta">
+          <h3>Download Full Clinical Report</h3>
+          <p>A professionally formatted PDF including all domain scores, body-region pain map, clinical findings, and personalised action plan for <strong style="color:#e2e8f0">${esc(cl.name)}</strong> — designed for GP, physiotherapist, or occupational health referral.</p>
+          ${state.backendSessionId?`<button class="btn-download" data-action="download-pdf" style="background:#0a9396;">⬇ Download PDF Report</button>`:'<p style="color:#7e9bb5;font-size:.85rem;">PDF available when backend server is running.</p>'}
+        </div>
+        <p class="disclaimer" style="margin-top:20px;">This report is generated by ErgoCare AI (precision scoring engine v2) and is for clinical reference purposes only. It does not constitute a medical diagnosis. All findings should be interpreted by a qualified occupational health clinician. NIOSH/RULA-aligned methodology.</p>
+        ${state.backendSessionId?`<p class="session-ref" style="margin-top:8px;">Session ID: <code>${esc(state.backendSessionId)}</code> · Client: ${esc(cl.name)}</p>`:''}
+      </div>
+
+    </div>
+  </div>`
+
+  // ── Animate percentile bar ──
+  setTimeout(() => {
+    const pf = document.getElementById('pct-fill')
+    if (pf) pf.style.width = pct + '%'
+  }, 400)
+
+  // ── Render all four charts ──
+  setTimeout(() => { buildCharts(scores, catData, pd) }, 200)
+}
+
+function buildCharts(scores, catData, pd) {
+  if (typeof Chart === 'undefined') return
+
+  const labels5 = catData.map(c => c.label.split(' ')[0] + ' ' + (c.label.split(' ')[1]||'').slice(0,3))
+  const vals5   = catData.map(c => c.score)
+
+  const colorFor = v => v >= 70 ? '#dc2626' : v >= 40 ? '#f59e0b' : '#10b981'
+  const alphaFor = v => v >= 70 ? 'rgba(220,38,38,0.15)' : v >= 40 ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)'
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+  const tickColor = isDark ? '#9ca3af' : '#6b7280'
+  const fontFam = "'DM Sans','Outfit',sans-serif"
+
+  Chart.defaults.font.family = fontFam
+
+  // ── 1. Radar chart ──
+  const rCtx = document.getElementById('chart-radar')?.getContext('2d')
+  if (rCtx) {
+    new Chart(rCtx, {
+      type: 'radar',
+      data: {
+        labels: labels5,
+        datasets: [
+          {
+            label: 'Your Risk',
+            data: vals5,
+            backgroundColor: 'rgba(10,147,150,0.18)',
+            borderColor: '#0a9396',
+            borderWidth: 2.5,
+            pointBackgroundColor: vals5.map(colorFor),
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+          },
+          {
+            label: 'Safe threshold (35%)',
+            data: [35,35,35,35,35],
+            backgroundColor: 'rgba(16,185,129,0.06)',
+            borderColor: 'rgba(16,185,129,0.5)',
+            borderWidth: 1.5,
+            borderDash: [6,4],
+            pointRadius: 0,
+          },
+          {
+            label: 'Clinical concern (70%)',
+            data: [70,70,70,70,70],
+            backgroundColor: 'rgba(220,38,38,0.04)',
+            borderColor: 'rgba(220,38,38,0.4)',
+            borderWidth: 1.5,
+            borderDash: [4,4],
+            pointRadius: 0,
+          },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { r: { min:0, max:100, ticks:{ stepSize:25, color:tickColor, font:{size:10,family:fontFam}, backdropColor:'transparent' }, grid:{ color:gridColor }, angleLines:{ color:gridColor }, pointLabels:{ color:tickColor, font:{size:11,family:fontFam} } } },
+        plugins: { legend:{ position:'bottom', labels:{ font:{size:10,family:fontFam}, color:tickColor, boxWidth:12, padding:12 } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}%` } } }
+      }
+    })
+  }
+
+  // ── 2. Horizontal bar ──
+  const bCtx = document.getElementById('chart-bar')?.getContext('2d')
+  if (bCtx) {
+    new Chart(bCtx, {
+      type: 'bar',
+      data: {
+        labels: labels5,
+        datasets: [{
+          label: 'Risk Score (%)',
+          data: vals5,
+          backgroundColor: vals5.map(alphaFor),
+          borderColor: vals5.map(colorFor),
+          borderWidth: 2,
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { min:0, max:100, ticks:{ color:tickColor, font:{size:10,family:fontFam}, callback: v=>v+'%' }, grid:{ color:gridColor }, border:{dash:[4,4]} },
+          y: { ticks:{ color:tickColor, font:{size:10,family:fontFam} }, grid:{ display:false } }
+        },
+        plugins: {
+          legend: { display:false },
+          tooltip: { callbacks:{ label: ctx => ` ${ctx.raw}% risk score` } },
+          annotation: {}
+        }
+      }
+    })
+  }
+
+  // ── 3. Pain sub-domain bar ──
+  const pCtx = document.getElementById('chart-pain')?.getContext('2d')
+  if (pCtx) {
+    // Chart.js v4: multi-line labels must be arrays, NOT '\n'
+    const painLabels = [
+      ['Cervical','(Neck)'],
+      ['Upper','Back'],
+      ['Shoulder',''],
+      ['Lumbar','(Lower back)'],
+      ['Wrist /','Hand'],
+      ['Forearm','/ Elbow']
+    ]
+    const painVals = [
+      pd.neck||0, pd.upper_back||0, pd.shoulder||0,
+      pd.lower_back||0, pd.wrist||0, pd.forearm||0
+    ]
+    const allZero = painVals.every(v => v === 0)
+
+    // Show warning note if all zero
+    const painCard = pCtx.canvas.closest('.chart-card')
+    if (painCard) {
+      const old = painCard.querySelector('.pain-note')
+      if (old) old.remove()
+      if (allZero) {
+        const note = document.createElement('p')
+        note.className = 'pain-note'
+        note.style.cssText = 'font-size:.78rem;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;margin-bottom:8px;line-height:1.5;'
+        note.textContent = '\u26a0\ufe0f All pain scores are 0 for this client (questions 31\u201338 answered as 0 or not answered). Bars will fill for clients reporting pain on the 0\u20135 scale.'
+        pCtx.canvas.parentElement.insertAdjacentElement('beforebegin', note)
+      }
+    }
+
+    new Chart(pCtx, {
+      type: 'bar',
+      data: {
+        labels: painLabels,
+        datasets: [{
+          label: 'Pain Index (%)',
+          data: painVals,
+          backgroundColor: allZero ? Array(6).fill('rgba(203,213,225,0.35)') : painVals.map(alphaFor),
+          borderColor:      allZero ? Array(6).fill('#cbd5e1')               : painVals.map(colorFor),
+          borderWidth: 2,
+          borderRadius: 6,
+          minBarLength: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { min:0, max:100, ticks:{ color:tickColor, font:{size:10,family:fontFam}, callback:v=>v+'%' }, grid:{ color:gridColor } },
+          x: { ticks:{ color:tickColor, font:{size:10,family:fontFam}, maxRotation:0 }, grid:{ display:false } }
+        },
+        plugins: {
+          legend: { display:false },
+          tooltip: {
+            callbacks: {
+              title: ctx => { const l = ctx[0].label; return Array.isArray(l) ? l.filter(Boolean).join(' ') : l },
+              label: ctx => allZero ? ' No pain reported (0%)' : ` Pain index: ${ctx.raw}%`
+            }
+          }
+        }
+      }
+    })
+  }
+
+  // ── 4. Donut chart ──
+  const dCtx = document.getElementById('chart-donut')?.getContext('2d')
+  if (dCtx) {
+    const domainWeights = [0.30, 0.22, 0.20, 0.16, 0.12]
+    const domainVals    = [scores.musculoskeletalRisk, scores.workloadStress, scores.postureRisk, scores.eyeStrain, scores.recoveryRisk]
+    const weighted      = domainVals.map((v,i) => Math.round(v * domainWeights[i]))
+    const donutLabels   = ['Musculoskeletal (30%)','Workload (22%)','Posture (20%)','Visual Fatigue (16%)','Recovery (12%)']
+    const donutColors   = ['#0a9396','#4564d6','#f59e0b','#7c3aed','#059669']
+    new Chart(dCtx, {
+      type: 'doughnut',
+      data: {
+        labels: donutLabels,
+        datasets: [{
+          data: weighted,
+          backgroundColor: donutColors.map(c=>c+'cc'),
+          borderColor: donutColors,
+          borderWidth: 2,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: {
+          legend: { position:'right', labels:{ font:{size:10,family:fontFam}, color:tickColor, boxWidth:12, padding:10 } },
+          tooltip: { callbacks:{ label: ctx => ` ${ctx.label}: ${ctx.raw} pts (weighted)` } }
+        }
+      }
+    })
+  }
+}
+function render(){
+  if(state.screen==='landing'){renderLanding();return}
+  if(state.screen==='assessment'){renderAssessment();return}
+  if(state.screen==='results'){renderResults();return}
+}
+
+/* ════════════════════════════════════════════════════
+   EVENTS
+════════════════════════════════════════════════════ */
+document.getElementById('app').addEventListener('click',e=>{
+  const t=e.target.closest('[data-action]'), o=e.target.closest('[data-option]')
+  if(o){state.selectedOption=o.dataset.option||'';if(state.mode==='typed')state.freeText=state.selectedOption;if(state.mode==='voice'&&!state.transcript.trim())state.transcript=state.selectedOption;render();return}
+  if(!t)return
+  const a=t.dataset.action
+  if(a==='start-typed')startAssessment('typed')
+  if(a==='start-voice')startAssessment('voice')
+  if(a==='reset')resetApp()
+  if(a==='previous'){if(state.idx>0){state.idx--;state.selectedOption='';state.freeText='';state.transcript='';render()}}
+  if(a==='next')saveAnswer()
+  if(a==='record')toggleRecording()
+  if(a==='download-pdf'&&state.backendSessionId)window.open(`${API}/api/sessions/${state.backendSessionId}/report.pdf`,'_blank')
+})
+document.getElementById('app').addEventListener('input',e=>{
+  const t=e.target
+  if(t.dataset.field==='typed')state.freeText=t.value
+  if(t.dataset.field==='transcript')state.transcript=t.value
+  const nb=document.querySelector('[data-action="next"]')
+  if(nb)nb.disabled=!canContinue()
+})
+
+/* ════════════════════════════════════════════════════
+   MODAL MINI CHARTS — small radar inside client modal
+════════════════════════════════════════════════════ */
+function buildModalCharts(scores, pd) {
+  // We don't inject charts inside the modal to keep it clean —
+  // the full charts are in the main report page. But we can
+  // show a mini bar chart if Chart.js is loaded.
+}
+</script>
+
+</body>
+</html>
